@@ -24,9 +24,14 @@ def parse_doc_type(filename: str) -> DocType:
     return m.group(1).upper() if m else "unknown"  # type: ignore[return-value]
 
 
-def load_attachment(rel_path: str, data_dir: Path) -> Attachment:
+def load_attachment(rel_path: str, data_dir: Path, text_store: Path | None = None) -> Attachment:
+    """Build an Attachment, preferring a pre-converted .txt from text_store when present."""
     path = data_dir / rel_path
-    text, read_error = read_attachment(path)
+    converted = text_store / f"{path.stem}.txt" if text_store else None
+    if converted and converted.is_file():
+        text, read_error = converted.read_text(encoding="utf-8"), None
+    else:
+        text, read_error = read_attachment(path)
     return Attachment(
         path=rel_path,
         doc_type=parse_doc_type(path.name),
@@ -36,9 +41,9 @@ def load_attachment(rel_path: str, data_dir: Path) -> Attachment:
     )
 
 
-def load_email(json_path: Path, data_dir: Path) -> Email:
+def load_email(json_path: Path, data_dir: Path, text_store: Path | None = None) -> Email:
     raw = json.loads(json_path.read_text())
-    attachments = [load_attachment(p, data_dir) for p in raw.get("attachments", [])]
+    attachments = [load_attachment(p, data_dir, text_store) for p in raw.get("attachments", [])]
     return Email(
         email_id=raw["email_id"],
         sender=raw.get("from", ""),
@@ -48,9 +53,11 @@ def load_email(json_path: Path, data_dir: Path) -> Email:
     )
 
 
-def load_inbox(data_dir: Path) -> Iterator[Email]:
+def load_inbox(data_dir: Path, text_store: Path | None = None) -> Iterator[Email]:
+    """Yield every email in data_dir/inbox. If text_store (e.g. output/converted_text)
+    is given, attachment text is read from there instead of re-parsing originals."""
     for json_path in sorted((data_dir / "inbox").glob("email_*.json")):
-        yield load_email(json_path, data_dir)
+        yield load_email(json_path, data_dir, text_store)
 
 
 def summarize(emails: list[Email]) -> str:
@@ -78,7 +85,8 @@ def summarize(emails: list[Email]) -> str:
 
 def main(argv: list[str]) -> None:
     data_dir = Path(argv[1]) if len(argv) > 1 else Path(__file__).resolve().parent.parent
-    emails = list(load_inbox(data_dir))
+    text_store = data_dir / "output" / "converted_text"
+    emails = list(load_inbox(data_dir, text_store if text_store.is_dir() else None))
     print(summarize(emails))
     if emails:
         print("\n--- first email ---")

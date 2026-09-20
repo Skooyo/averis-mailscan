@@ -12,3 +12,5 @@ python-dotenv
 
 # Dev
 pytest>=8
+groq>=1.0
+pytest-asyncio>=0.23

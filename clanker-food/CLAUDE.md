@@ -40,7 +40,7 @@ for attachment text.
 - **Deploy**: Supabase (backend) + Vercel (frontend) — **deploy a
   skeleton on day 1**, iterate on a live public URL. Never leave deployment
   to the last 2 hours.
-- **Advanced stage only** (after basic works): `pdfplumber`/`PyMuPDF` (PDF),
+- **Advanced stage only** (after basic works): `PyMuPDF` (PDF),
   `python-docx` (Word), `pytesseract` or vision-LLM (scanned docs). Avoid
   ColPali — it's a retrieval tool for finding documents, not extracting
   fields from a known document.

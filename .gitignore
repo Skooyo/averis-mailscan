@@ -1,6 +1,8 @@
 apiDetails.env
-.venv/token.json
+.venv/
+token.json
 credentials.json
 .env
 __pycache__/
 .pytest_cache/
+output/

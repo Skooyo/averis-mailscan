@@ -53,16 +53,37 @@ _READERS = {
     "docx": _read_docx,
 }
 
+# Leading bytes each binary format must start with. xlsx/docx are zip containers.
+_MAGIC = {
+    "pdf": (b"%PDF",),
+    "xlsx": (b"PK\x03\x04",),
+    "docx": (b"PK\x03\x04",),
+}
+
+
+def detect_format(path: Path) -> tuple[str, str | None]:
+    """Return (ext, error). Error is set when the file's magic bytes contradict its extension."""
+    ext = path.suffix.lstrip(".").lower()
+    expected = _MAGIC.get(ext)
+    if expected:
+        with path.open("rb") as f:
+            head = f.read(8)
+        if not head.startswith(expected):
+            return ext, "extension_mismatch"
+    return ext, None
+
 
 def read_attachment(path: Path) -> ReadResult:
     """Return (text, None) on success or (None, reason) on failure. Never raises."""
     if not path.is_file():
         return None, "file_not_found"
 
-    ext = path.suffix.lstrip(".").lower()
+    ext, detect_error = detect_format(path)
     reader = _READERS.get(ext)
     if reader is None:
         return None, "unsupported_extension"
+    if detect_error:
+        return None, detect_error
 
     try:
         text = reader(path)
