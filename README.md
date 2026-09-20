@@ -21,7 +21,7 @@ Ingestion → Classification → (comparison requests: Extraction → Comparison
 |---|---|---|
 | Attachment → text | `backend/readers.py`, `backend/convert.py` | done |
 | Ingestion | `backend/ingest.py` | done |
-| Classification | `backend/classify.py`, `backend/llm.py` (Groq) | built, needs live run |
+| Classification | `backend/classify.py`, `backend/llm.py` (Groq) | done |
 | Extraction | | todo |
 | Comparison | | todo |
 | Escalation | | todo |

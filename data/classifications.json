@@ -948,5 +948,1655 @@
     "category": "general",
     "confidence": 0.94,
     "reasoning": "Requests a draft BL for checking, no SI attached, thus not a comparison request."
+  },
+  "email_191": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "The body requests cancellation of an invoice and reversal of the PGI."
+  },
+  "email_192": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "The body provides full shipment details and asks to prepare a Shipping Instruction."
+  },
+  "email_193": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "The body supplies complete shipment information and requests a Shipping Instruction."
+  },
+  "email_194": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "The message is an automated notification stating no action is required."
+  },
+  "email_195": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The sender asks to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_196": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "The email contains full shipment details and requests a Shipping Instruction."
+  },
+  "email_197": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "The body asks to verify the BL matches the SI before release."
+  },
+  "email_198": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "The sender asks to check the draft BL against the SI and report discrepancies."
+  },
+  "email_199": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The request is to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_200": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The email is a reminder with a list of outstanding BLs, no specific request for comparison or new SI."
+  },
+  "email_201": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Please find Shipping instruction for 5RMY-05061\" and provides full SI details"
+  },
+  "email_202": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body provides a complete Shipping Instruction and says \"Please find Shipping instruction for 5ALT-93136\""
+  },
+  "email_203": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Message requests the missing GR for an invoice to proceed with billing"
+  },
+  "email_204": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Contains a prize claim scam with promotional link"
+  },
+  "email_205": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides full Shipping Instruction details and says \"Please find Shipping instruction for 5SUS-70108\""
+  },
+  "email_206": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style prize claim email"
+  },
+  "email_207": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Asks to \"send the draft BL for ... checking\" rather than compare two documents"
+  },
+  "email_208": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body states \"Attached are the SI and draft BL ... Please check the details and confirm\""
+  },
+  "email_209": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides a full Shipping Instruction and requests a draft BL later"
+  },
+  "email_210": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Requests sending a draft BL for checking, not a comparison"
+  },
+  "email_211": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "The body asks to arrange posting the GR so billing can proceed, which is a billing/invoice related query."
+  },
+  "email_212": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "The sender asks for a breakdown of THC/local charges on an invoice, a classic invoice query."
+  },
+  "email_213": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "The email provides a daily berthing report; it is an informational update, not a request to compare or create SI."
+  },
+  "email_214": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "The body supplies full shipment details and asks to revert with a draft BL, indicating a request to raise a Shipping Instruction."
+  },
+  "email_215": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "The message is a typical phishing/marketing scam offering a prize."
+  },
+  "email_216": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Similar to email_211, it requests posting the GR for billing, an invoice\u2011related issue."
+  },
+  "email_217": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides complete shipment details and requests a draft BL, fitting a new SI request."
+  },
+  "email_218": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Mentions an attached update summary and loading completion; it is an informational update."
+  },
+  "email_219": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Automated notification stating no action required; falls under general."
+  },
+  "email_220": {
+    "category": "general",
+    "confidence": 0.92,
+    "reasoning": "Requests the draft BL to be sent for checking, which is a request to receive a document, not to compare it."
+  },
+  "email_221": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body says \"Please find Shipping instruction for 5RUS-39613... Please revert with draft BL once available\" indicating a new SI is being supplied."
+  },
+  "email_222": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Promotional investment scam content, clearly spam."
+  },
+  "email_223": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Request is to \"send the draft BL for SIJ0061675 for checking\" which is a request to receive a document, not to compare two."
+  },
+  "email_224": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Asks to confirm D&D/detention charges before payment, a billing/charge query."
+  },
+  "email_225": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body: \"Attached are the SI and draft BL... Please check the details and confirm\" \u2013 classic compare SI vs draft BL."
+  },
+  "email_226": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Bank officer scam asking for bank details, typical phishing spam."
+  },
+  "email_227": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body: \"Attached are the SI and draft BL... Please check the details and confirm\" \u2013 request to verify BL against SI."
+  },
+  "email_228": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Provides full Shipping Instruction details and asks for draft BL, a new SI request."
+  },
+  "email_229": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Requests sending a draft BL for checking, not a comparison."
+  },
+  "email_230": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Reminder to submit SI & AED; a general operational notice."
+  },
+  "email_231": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Body contains a prize claim scam asking to click a link, typical spam."
+  },
+  "email_232": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Automated notification stating billing process completed with no action required."
+  },
+  "email_233": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body provides full Shipping instruction details and asks to revert with draft BL."
+  },
+  "email_234": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Reminder to submit SI & AED, not a request to compare or create a new SI."
+  },
+  "email_235": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to check the attached SI and draft BL and confirm."
+  },
+  "email_236": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Request to cancel an invoice and reverse the PGI."
+  },
+  "email_237": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Asks to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_238": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Automated reminder about outstanding BL list, no specific request to compare or create SI."
+  },
+  "email_239": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body asks to verify the BL matches the SI before release."
+  },
+  "email_240": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Provides full Shipping instruction details and asks to revert with draft BL."
+  },
+  "email_241": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The email only shares a daily berthing report and does not request a comparison or new SI."
+  },
+  "email_242": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "The request is to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_243": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "The body asks to verify the BL matches the SI before release."
+  },
+  "email_244": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "The sender supplies full shipping instruction details and asks for a draft BL."
+  },
+  "email_245": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Provides complete shipping instruction information and requests a draft BL."
+  },
+  "email_246": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Contains shipping instruction data and asks to revert with a draft BL."
+  },
+  "email_247": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Requests sending a draft BL for checking, not a comparison."
+  },
+  "email_248": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Clearly a phishing/prize scam email."
+  },
+  "email_249": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Asks to check the SI and draft BL details and confirm."
+  },
+  "email_250": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Requests sending a draft BL for checking, not a verification against an SI."
+  },
+  "email_251": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Please find Shipping instruction ... Please revert with draft BL once available\" indicating a new SI request."
+  },
+  "email_252": {
+    "category": "general",
+    "confidence": 0.99,
+    "reasoning": "Automated notification stating \"No action required\"."
+  },
+  "email_253": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Contains prize claim scam language."
+  },
+  "email_254": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style email offering a prize."
+  },
+  "email_255": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Requests action on a list of outstanding BLs, not a comparison or new SI."
+  },
+  "email_256": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Asks to \"verify the BL matches the SI before we release to the line\"."
+  },
+  "email_257": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides full Shipping Instruction and asks for draft BL."
+  },
+  "email_258": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Informational update about loading and documents to follow."
+  },
+  "email_259": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Requests to \"send the draft BL for checking\" rather than compare it to an SI."
+  },
+  "email_260": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides Shipping Instruction details and asks for draft BL."
+  },
+  "email_261": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\", which is a request to receive a document, not to compare it with an SI."
+  },
+  "email_262": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "The email concerns a missing GR for an invoice and asks to arrange posting, a typical billing/invoice issue."
+  },
+  "email_263": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Again the request is to \"send the draft BL for ... checking\", i.e., to receive a draft, not to compare it."
+  },
+  "email_264": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "The sender provides full Shipping Instruction details and asks to revert with a draft BL, indicating a new SI creation request."
+  },
+  "email_265": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\", which is a request for a document, not a comparison."
+  },
+  "email_266": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The email is a reminder to submit SI & AED, a routine operational notice."
+  },
+  "email_267": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "The content is a prize\u2011claim phishing message, typical spam."
+  },
+  "email_268": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "The sender asks to confirm D&D/detention charges before payment, a billing\u2011related query."
+  },
+  "email_269": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "The request is to cancel an invoice and reverse the PGI, clearly an invoice\u2011related action."
+  },
+  "email_270": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "The body explicitly asks to \"verify the BL matches the SI before we release to the line,\" a direct comparison request."
+  },
+  "email_271": {
+    "category": "general",
+    "confidence": 0.98,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\" which is a request to receive a document, not to compare it."
+  },
+  "email_272": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "The email requests the missing GR for an invoice so billing can proceed, a typical invoice\u2011related query."
+  },
+  "email_273": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "It says \"Attached are the SI and draft BL ... Please check the details and confirm,\" a clear request to compare SI vs draft BL."
+  },
+  "email_274": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "The sender is requesting to cancel an invoice and reverse the PGI, which falls under invoice queries."
+  },
+  "email_275": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "The message attaches SI and draft BL and asks to \"check the details and confirm,\" i.e., a comparison request."
+  },
+  "email_276": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "The email provides full Shipping Instruction details and asks to revert with a draft BL, indicating a new SI needs to be created."
+  },
+  "email_277": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "It supplies a complete Shipping Instruction and requests a draft BL, fitting the new SI request category."
+  },
+  "email_278": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "The body contains a full Shipping Instruction and asks for a draft BL, so it is a new SI request."
+  },
+  "email_279": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides Shipping Instruction details and asks to revert with a draft BL, matching new SI request."
+  },
+  "email_280": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "The email requests cancellation of an invoice and reversal of the PGI, which is an invoice\u2011related query."
+  },
+  "email_281": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Body asks to send the draft BL for checking, not to compare it with an SI"
+  },
+  "email_282": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Body requests the draft BL to be sent for checking"
+  },
+  "email_283": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Body provides full Shipping Instruction details and asks to revert with draft BL"
+  },
+  "email_284": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "Body mentions missing GR for an invoice and asks to arrange posting"
+  },
+  "email_285": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "Body repeats missing GR for another invoice, requesting action"
+  },
+  "email_286": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "Body asks whether THC/local charge is included or billed separately"
+  },
+  "email_287": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "Body queries THC/local charge breakdown for an invoice"
+  },
+  "email_288": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Body asks to send the draft BL for checking"
+  },
+  "email_289": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Body supplies a Shipping Instruction and requests a draft BL"
+  },
+  "email_290": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Body provides Shipping Instruction details and asks to revert with draft BL"
+  },
+  "email_291": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Attached are the SI and draft BL ... Please check the details and confirm\"."
+  },
+  "email_292": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Request is to \"send the draft BL for SIJ1952569 for checking\", not to compare two documents."
+  },
+  "email_293": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Body provides full shipping instruction details and asks to revert with draft BL."
+  },
+  "email_294": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Message shares a list of outstanding BL and asks to action pending items, not a comparison or new SI."
+  },
+  "email_295": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Body supplies a Shipping Instruction and requests a draft BL once available."
+  },
+  "email_296": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body: \"Attached are the SI and draft BL ... Please check the details and confirm\"."
+  },
+  "email_297": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Automated RPA notice stating \"No action required\"."
+  },
+  "email_298": {
+    "category": "invoice_query",
+    "confidence": 0.99,
+    "reasoning": "Request to cancel invoice and reverse PGI."
+  },
+  "email_299": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Asks to \"send the draft BL for ... checking\", which is a request to receive a document, not a comparison."
+  },
+  "email_300": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body asks to \"verify the BL matches the SI before we release to the line\"."
+  },
+  "email_301": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "asks to send the draft BL for checking, not to compare it with an SI"
+  },
+  "email_302": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "requests verification that the BL matches the SI"
+  },
+  "email_303": {
+    "category": "invoice_query",
+    "confidence": 0.94,
+    "reasoning": "mentions missing GR for an invoice and asks to arrange it"
+  },
+  "email_304": {
+    "category": "invoice_query",
+    "confidence": 0.94,
+    "reasoning": "mentions missing GR for an invoice and asks to arrange it"
+  },
+  "email_305": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "asks to send the draft BL for checking, not to compare with an SI"
+  },
+  "email_306": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "provides full shipping instruction details and asks for a draft BL"
+  },
+  "email_307": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "asks to verify the BL matches the SI"
+  },
+  "email_308": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "provides shipping instruction details and requests a draft BL"
+  },
+  "email_309": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "asks to send the draft BL for checking, not to compare with an SI"
+  },
+  "email_310": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "provides shipping instruction details and requests a draft BL"
+  },
+  "email_311": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Please find Shipping instruction for 5AKR-88443\" and provides full shipment details."
+  },
+  "email_312": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body requests to \"check the draft BL against the SI\" and report discrepancies."
+  },
+  "email_313": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body asks to \"check the draft BL against the SI for PO and revert with any discrepancy\"."
+  },
+  "email_314": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Body mentions missing GR for an invoice and asks to arrange posting for billing."
+  },
+  "email_315": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Email is a prize/offer scam promising a free iPhone with a suspicious link."
+  },
+  "email_316": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body asks about THC/local charge breakdown for a specific invoice."
+  },
+  "email_317": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body provides full shipping instruction details and asks to revert with draft BL."
+  },
+  "email_318": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body requests to \"send the draft BL for ... checking\" rather than compare two documents."
+  },
+  "email_319": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to \"send the draft BL for ... checking\" without providing an SI to compare."
+  },
+  "email_320": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body supplies complete shipping instruction details and asks for a draft BL."
+  },
+  "email_321": {
+    "category": "general",
+    "confidence": 0.98,
+    "reasoning": "The body asks to send the draft BL for checking, which is a request to provide a document, not to compare it."
+  },
+  "email_322": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "The email supplies full shipping instruction details and asks to revert with a draft BL."
+  },
+  "email_323": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Automated notification stating no action required."
+  },
+  "email_324": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Explicit request: \"Please check the details and confirm\" for attached SI and draft BL."
+  },
+  "email_325": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Provides an update summary; no request for SI or BL comparison."
+  },
+  "email_326": {
+    "category": "general",
+    "confidence": 0.98,
+    "reasoning": "Requests sending a draft BL for checking, not a comparison."
+  },
+  "email_327": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "Contains full shipping instruction details and asks to revert with a draft BL."
+  },
+  "email_328": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Update summary notification; no actionable request."
+  },
+  "email_329": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style email demanding payment for a parcel."
+  },
+  "email_330": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Office notice and New Year greeting; not a shipping instruction or BL request."
+  },
+  "email_331": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body asks to confirm D&D/detention charges before payment, a billing question."
+  },
+  "email_332": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Body requests action on a list of outstanding BLs, not a compare or SI creation."
+  },
+  "email_333": {
+    "category": "general",
+    "confidence": 0.98,
+    "reasoning": "Body is a holiday greeting/office notice, no request for comparison or SI."
+  },
+  "email_334": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body explicitly says \u201ccheck the draft BL against the SI \u2026 revert with any discrepancy.\u201d"
+  },
+  "email_335": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body says \u201cAttached are the SI and draft BL \u2026 please check the details and confirm.\u201d"
+  },
+  "email_336": {
+    "category": "new_si_request",
+    "confidence": 0.95,
+    "reasoning": "Body provides full Shipping Instruction details and asks to revert with draft BL."
+  },
+  "email_337": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Body asks to send the draft BL for checking, not to compare two documents."
+  },
+  "email_338": {
+    "category": "new_si_request",
+    "confidence": 0.95,
+    "reasoning": "Body supplies Shipping Instruction information and requests draft BL later."
+  },
+  "email_339": {
+    "category": "new_si_request",
+    "confidence": 0.95,
+    "reasoning": "Body supplies Shipping Instruction details and asks for draft BL once available."
+  },
+  "email_340": {
+    "category": "general",
+    "confidence": 0.98,
+    "reasoning": "Automated notification stating no action required."
+  },
+  "email_341": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\" which is a request to receive a document, not to compare it."
+  },
+  "email_342": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "The body says \"check the draft BL against the SI ... revert with any discrepancy\"."
+  },
+  "email_343": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The request is to \"send the draft BL for ... checking\", i.e., to receive a draft BL."
+  },
+  "email_344": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "The email provides full Shipping Instruction details and asks to \"revert with draft BL once available\"."
+  },
+  "email_345": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "The message is a classic phishing/offer scam asking for bank details."
+  },
+  "email_346": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "It is an informational update about loading completion and upcoming documents."
+  },
+  "email_347": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Another informational loading\u2011completion notice with no request for comparison or SI creation."
+  },
+  "email_348": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "The body requests to \"check the draft BL against the SI for PO and revert with any discrepancy\"."
+  },
+  "email_349": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "The sender says \"Please check the details and confirm\" after attaching SI and draft BL."
+  },
+  "email_350": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The email asks to \"send the draft BL for ... checking\", which is a request to receive a draft BL."
+  },
+  "email_351": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body says \"Attached are the SI and draft BL ... Please check the details and confirm\"."
+  },
+  "email_352": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body provides full Shipping instruction details and asks to revert with draft BL."
+  },
+  "email_353": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body supplies Shipping instruction information and requests a draft BL later."
+  },
+  "email_354": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body requests checking the attached SI and draft BL for confirmation."
+  },
+  "email_355": {
+    "category": "invoice_query",
+    "confidence": 0.95,
+    "reasoning": "Body asks to confirm D&D/detention charges before payment."
+  },
+  "email_356": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Body shares a daily berthing report; no request for comparison or SI creation."
+  },
+  "email_357": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Body provides Shipping instruction details and asks for a draft BL."
+  },
+  "email_358": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Body contains Shipping instruction data and requests a draft BL."
+  },
+  "email_359": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Body includes Shipping instruction details and asks to revert with draft BL."
+  },
+  "email_360": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Body supplies Shipping instruction information and requests a draft BL."
+  },
+  "email_361": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body says \"check the draft BL against the SI ... revert with any discrepancy\""
+  },
+  "email_362": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Body provides full Shipping Instruction details and asks to \"revert with draft BL once available\""
+  },
+  "email_363": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Content is a bank\u2011officer scam offering investment returns and requesting bank details"
+  },
+  "email_364": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body requests to \"verify the BL matches the SI before we release to the line\""
+  },
+  "email_365": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Promotional prize claim with a suspicious link"
+  },
+  "email_366": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "RPA notice about outstanding BL list, no request to compare or create SI"
+  },
+  "email_367": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body asks to \"verify the BL matches the SI before we release to the line\""
+  },
+  "email_368": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Provides full Shipping Instruction details and asks for a draft BL"
+  },
+  "email_369": {
+    "category": "invoice_query",
+    "confidence": 0.95,
+    "reasoning": "Requests confirmation of D&D/detention charges before payment"
+  },
+  "email_370": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Supplies Shipping Instruction details and asks to revert with draft BL"
+  },
+  "email_371": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Please find Shipping instruction for 5RUS-16202\" and provides full SI details, requesting a draft BL."
+  },
+  "email_372": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Body asks to \"confirm the amount\" of D&D/detention charges before payment."
+  },
+  "email_373": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body requests confirmation of D&D/detention charges amount for payment."
+  },
+  "email_374": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body asks to confirm D&D/detention charges amount before releasing payment."
+  },
+  "email_375": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Body queries whether THC/local charge is included or billed separately."
+  },
+  "email_376": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body provides full Shipping Instruction details and asks for a draft BL."
+  },
+  "email_377": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body requests verification that the BL matches the SI before release."
+  },
+  "email_378": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body asks to verify the BL matches the SI before release."
+  },
+  "email_379": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body says \"check the draft BL against the SI for PO and revert with any discrepancy\"."
+  },
+  "email_380": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body supplies full Shipping Instruction details and requests a draft BL."
+  },
+  "email_381": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\", which is a request to receive a document, not to compare two."
+  },
+  "email_382": {
+    "category": "spam",
+    "confidence": 0.98,
+    "reasoning": "The message is a classic phishing/financial scam asking for bank details."
+  },
+  "email_383": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "The sender says \"Kindly verify the BL matches the SI before we release to the line\"."
+  },
+  "email_384": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The request is to \"send the draft BL for ... checking\", which is a request to receive a draft BL."
+  },
+  "email_385": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The body asks to \"send the draft BL for ... checking\", a request for a document, not a comparison."
+  },
+  "email_386": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "The email mentions a missing GR for an invoice and asks to arrange it for billing."
+  },
+  "email_387": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "The message is a scam offering a fake parcel fee payment link."
+  },
+  "email_388": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "The sender provides full shipping instruction details and asks to \"revert with draft BL once available\"."
+  },
+  "email_389": {
+    "category": "invoice_query",
+    "confidence": 0.95,
+    "reasoning": "The email asks to confirm D&D/detention charges before payment, a billing question."
+  },
+  "email_390": {
+    "category": "spam",
+    "confidence": 0.98,
+    "reasoning": "Another phishing email requesting bank details under a fake urgent proposal."
+  },
+  "email_391": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"please find attached the shipping instruction and the draft bill of lading ... kindly verify the BL matches the SI\""
+  },
+  "email_392": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style request to verify account via link"
+  },
+  "email_393": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body provides full shipping instruction details and asks to revert with draft BL"
+  },
+  "email_394": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Automated notification stating no action required"
+  },
+  "email_395": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Promotional prize claim email, typical scam"
+  },
+  "email_396": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Automated notification with no action required"
+  },
+  "email_397": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body supplies shipping instruction details and requests draft BL"
+  },
+  "email_398": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body asks to check SI and draft BL and confirm"
+  },
+  "email_399": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Automated notification stating no action required"
+  },
+  "email_400": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body provides shipping instruction details and asks to revert with draft BL"
+  },
+  "email_401": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body says \"please assist to send the draft BL ... for checking\" which is a request to send, not to compare."
+  },
+  "email_402": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Asks for THC / local charge breakdown on an invoice."
+  },
+  "email_403": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Requests cancellation of an invoice and reversal of the PGI."
+  },
+  "email_404": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style message about unpaid customs fee and payment link."
+  },
+  "email_405": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body: \"Attached are the SI and draft BL ... Please check the details and confirm.\""
+  },
+  "email_406": {
+    "category": "invoice_query",
+    "confidence": 0.95,
+    "reasoning": "Requests cancellation of an invoice and reversal of the PGI."
+  },
+  "email_407": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to check SI and draft BL and confirm."
+  },
+  "email_408": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to check SI and draft BL and confirm."
+  },
+  "email_409": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body: \"Pls assist to check the draft BL against the SI ... revert with any discrepancy.\""
+  },
+  "email_410": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to check SI and draft BL and confirm."
+  },
+  "email_411": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Attached are the SI and draft BL ... Please check the details and confirm\""
+  },
+  "email_412": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body requests the missing GR for an invoice to proceed with billing"
+  },
+  "email_413": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Body provides full shipping instruction details and asks to revert with draft BL"
+  },
+  "email_414": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body shares a daily berthing report, no SI/BL action required"
+  },
+  "email_415": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Body is a holiday greeting/office notice, not a shipping request"
+  },
+  "email_416": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"Attached are the SI and draft BL ... Please check the details and confirm\""
+  },
+  "email_417": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Body is a classic phishing request for bank details and money transfer"
+  },
+  "email_418": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body shares another daily berthing report"
+  },
+  "email_419": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Body asks to send the draft BL for checking, not to compare it with an SI"
+  },
+  "email_420": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body asks for THC/local charge breakdown for a specific invoice"
+  },
+  "email_421": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_422": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Requests the missing GR for an invoice to proceed with billing."
+  },
+  "email_423": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to send the draft BL for checking, no comparison."
+  },
+  "email_424": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to send the draft BL for checking, not a verification."
+  },
+  "email_425": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Requests cancellation of an invoice and reversal of the PGI."
+  },
+  "email_426": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Explicitly asks to verify the BL matches the SI."
+  },
+  "email_427": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Provides a full Shipping Instruction and asks to revert with draft BL."
+  },
+  "email_428": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Requests to check the draft BL against the SI for discrepancies."
+  },
+  "email_429": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Supplies a Shipping Instruction and asks to revert with draft BL."
+  },
+  "email_430": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "Provides a Shipping Instruction and requests a draft BL once available."
+  },
+  "email_431": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The body asks to submit SI & AED, a reminder, not providing an SI or comparing documents."
+  },
+  "email_432": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "The request is to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_433": {
+    "category": "new_si_request",
+    "confidence": 0.97,
+    "reasoning": "The email supplies full Shipping Instruction details and asks to revert with a draft BL."
+  },
+  "email_434": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "It attaches an SI and draft BL and asks to check the details and confirm."
+  },
+  "email_435": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "The sender asks to verify the BL matches the SI before release."
+  },
+  "email_436": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "The request is to send a draft BL for checking, not a comparison."
+  },
+  "email_437": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Provides a full Shipping Instruction and requests a draft BL."
+  },
+  "email_438": {
+    "category": "new_si_request",
+    "confidence": 0.96,
+    "reasoning": "Provides Shipping Instruction details and asks for a draft BL."
+  },
+  "email_439": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "The email asks to confirm D&D/detention charges before payment."
+  },
+  "email_440": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Requests sending a draft BL for checking, not a comparison."
+  },
+  "email_441": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Body states automated notification with no action required, fitting the general category."
+  },
+  "email_442": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Request is to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_443": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides full Shipping Instruction details and asks to revert with draft BL."
+  },
+  "email_444": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Asks to send a draft BL for checking, which is a general request."
+  },
+  "email_445": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Contains a daily berthing report notice, a routine operational update."
+  },
+  "email_446": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Requests sending a draft BL for checking, fitting the general category."
+  },
+  "email_447": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Again a request to send a draft BL for checking, classified as general."
+  },
+  "email_448": {
+    "category": "general",
+    "confidence": 0.93,
+    "reasoning": "Request to send a draft BL for checking, which is a general request."
+  },
+  "email_449": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Phishing style message about unpaid customs fee and prize claim."
+  },
+  "email_450": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Typical scam email offering a prize and urging account update."
+  },
+  "email_451": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body requests to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_452": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body asks to arrange posting the GR so billing can proceed, a billing/invoice issue."
+  },
+  "email_453": {
+    "category": "comparison_request",
+    "confidence": 0.98,
+    "reasoning": "Body says \"check the draft BL against the SI\" and revert with discrepancies."
+  },
+  "email_454": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body requests sending the draft BL for checking, not a comparison."
+  },
+  "email_455": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Body is a classic bank\u2011officer scam asking for bank details."
+  },
+  "email_456": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to send the draft BL for checking, no comparison involved."
+  },
+  "email_457": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Body offers a prize and asks for a survey payment \u2013 typical phishing."
+  },
+  "email_458": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body requests confirmation of D&D/detention charges before payment, an invoice\u2011related query."
+  },
+  "email_459": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_460": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Body is a reminder to submit SI & AED, an office notice."
+  },
+  "email_461": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "asks \"is the THC / local charge included or billed separately?\" which is a charge breakdown question"
+  },
+  "email_462": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "requests to \"verify the BL matches the SI\" and compare draft BL against SI"
+  },
+  "email_463": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "automated notification stating \"No action required\""
+  },
+  "email_464": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "provides a berthing report and does not ask for comparison or SI creation"
+  },
+  "email_465": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "asks to \"send the draft BL for checking\" rather than compare it to an SI"
+  },
+  "email_466": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "supplies full shipping instruction details and asks for a draft BL"
+  },
+  "email_467": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "provides shipping instruction details and requests a draft BL"
+  },
+  "email_468": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "asks to \"check the draft BL against the SI\" and report discrepancies"
+  },
+  "email_469": {
+    "category": "new_si_request",
+    "confidence": 0.99,
+    "reasoning": "includes full shipping instruction information and requests a draft BL"
+  },
+  "email_470": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "clearly a marketing/scam offer unrelated to shipping documentation"
+  },
+  "email_471": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Body asks to confirm D&D/detention charges before payment, which is a billing/invoice question."
+  },
+  "email_472": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Request to cancel an invoice and reverse the PGI is clearly an invoice-related query."
+  },
+  "email_473": {
+    "category": "invoice_query",
+    "confidence": 0.96,
+    "reasoning": "Body requests confirmation of D&D/detention charges before payment, an invoice/billing matter."
+  },
+  "email_474": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Explicit request to verify that the draft BL matches the SI."
+  },
+  "email_475": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Provides full shipping instruction details and asks to revert with draft BL, indicating a new SI to be raised."
+  },
+  "email_476": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Asks to send the draft BL for checking, not to compare it with an SI."
+  },
+  "email_477": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Supplies complete shipping instruction data and requests a draft BL, fitting a new SI request."
+  },
+  "email_478": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Contains full shipping instruction details and asks for a draft BL, indicating a new SI request."
+  },
+  "email_479": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Requests verification that the attached draft BL matches the attached SI."
+  },
+  "email_480": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Requests the draft BL to be sent for checking, not a comparison with an SI."
+  },
+  "email_481": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body says \"Attached are the SI and draft BL ... Please check the details and confirm\"."
+  },
+  "email_482": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Body requests to \"send the draft BL for ... checking\" rather than compare two documents."
+  },
+  "email_483": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body: \"Attached are the SI and draft BL ... Please check the details and confirm.\""
+  },
+  "email_484": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body provides full Shipping Instruction details and asks to revert with draft BL."
+  },
+  "email_485": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body supplies Shipping Instruction information and requests draft BL later."
+  },
+  "email_486": {
+    "category": "general",
+    "confidence": 0.95,
+    "reasoning": "Body asks to \"send the draft BL for ... checking\" not to compare SI and BL."
+  },
+  "email_487": {
+    "category": "new_si_request",
+    "confidence": 0.98,
+    "reasoning": "Body contains a complete Shipping Instruction and asks for a draft BL."
+  },
+  "email_488": {
+    "category": "general",
+    "confidence": 0.94,
+    "reasoning": "Body shares a list of outstanding BL and asks to action pending items."
+  },
+  "email_489": {
+    "category": "spam",
+    "confidence": 0.99,
+    "reasoning": "Content is a prize scam offering an iPhone for a survey."
+  },
+  "email_490": {
+    "category": "invoice_query",
+    "confidence": 0.97,
+    "reasoning": "Body mentions missing GR for an invoice and requests billing action."
+  },
+  "email_491": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body says \"check the draft BL against the SI ... and revert with any discrepancy\""
+  },
+  "email_492": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "Asks for breakdown of THC / local charge on a specific invoice"
+  },
+  "email_493": {
+    "category": "general",
+    "confidence": 0.97,
+    "reasoning": "Requests to send the draft BL for checking, not to compare it with an SI"
+  },
+  "email_494": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body: \"Please check the details and confirm\" after attaching SI and draft BL"
+  },
+  "email_495": {
+    "category": "general",
+    "confidence": 0.96,
+    "reasoning": "Requests the draft BL to be sent for checking, no SI provided for comparison"
+  },
+  "email_496": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body asks to check attached SI and draft BL and confirm"
+  },
+  "email_497": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "Inquires about THC / local charge breakdown for a specific invoice"
+  },
+  "email_498": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body: \"Please check the details and confirm\" with SI and draft BL attached"
+  },
+  "email_499": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body requests to check draft BL against SI and report discrepancies"
+  },
+  "email_500": {
+    "category": "invoice_query",
+    "confidence": 0.98,
+    "reasoning": "Requests cancellation of an invoice and reversal of PGI"
+  },
+  "email_501": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body asks to confirm the BL is in order, i.e., compare SI with draft BL, even though BL attachment is missing"
+  },
+  "email_502": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body requests confirmation that the BL matches the SI, i.e., compare SI and draft BL despite missing BL"
+  },
+  "email_503": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body asks to confirm the BL is in order, i.e., compare SI with draft BL, even though BL not attached"
+  },
+  "email_504": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body requests confirmation that the BL matches the SI, i.e., compare SI and draft BL despite missing BL"
+  },
+  "email_505": {
+    "category": "comparison_request",
+    "confidence": 0.96,
+    "reasoning": "Body asks to confirm the BL is in order, i.e., compare SI with draft BL, even though BL attachment is absent"
+  },
+  "email_506": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body explicitly says \u201cPlease compare the SI and draft BL \u2026 and confirm\u201d"
+  },
+  "email_507": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body explicitly requests comparison of SI and draft BL and confirmation"
+  },
+  "email_508": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to compare the SI and draft BL and confirm, despite missing attachments"
+  },
+  "email_509": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body requests comparison of SI and draft BL and confirmation"
+  },
+  "email_510": {
+    "category": "comparison_request",
+    "confidence": 0.97,
+    "reasoning": "Body asks to compare the SI and draft BL and confirm, even though no attachments are present"
+  },
+  "email_511": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body says \"Attached SI and draft BL ... for checking\" indicating a request to compare SI and draft BL."
+  },
+  "email_512": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body requests \"Attached SI and draft BL for checking\" which is a compare/verify request."
+  },
+  "email_513": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body asks to check \"Attached SI and draft BL for ...\" indicating a comparison request."
+  },
+  "email_514": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body requests \"Attached SI and draft BL for checking\" \u2013 a compare/verify task."
+  },
+  "email_515": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body says \"Attached SI and draft BL for ... for checking\" which is a request to compare the documents."
+  },
+  "email_516": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body explicitly says \"Please compare the SI and draft BL\"."
+  },
+  "email_517": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body explicitly says \"Please compare the SI and draft BL\"."
+  },
+  "email_518": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body explicitly says \"Please compare the SI and draft BL\"."
+  },
+  "email_519": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body explicitly says \"Please compare the SI and draft BL\"."
+  },
+  "email_520": {
+    "category": "comparison_request",
+    "confidence": 0.99,
+    "reasoning": "Body explicitly says \"Please compare the SI and draft BL\"."
   }
 }
