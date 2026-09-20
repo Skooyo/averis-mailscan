@@ -216,3 +216,5 @@ The largest single criterion is Working Core Prototype at 25 points.
 
 > **Scoring note:** use the performance bands as guidance and award a whole-number score within the relevant range. Score each criterion independently and avoid rewarding the same evidence twice.
 
+
+ingestion + classification -> extraction + db schema -> comparison json of SI and BL -> output pattern matching (case scenarios) =>stream to fe
