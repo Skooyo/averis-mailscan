@@ -22,18 +22,20 @@ Rules:
 - Example equivalences:
   - "port_of_loading" = "loading port" = "port of loading"
   - "port_of_discharge" = "discharge port" = "port of discharge"
+  - "3 x 40HC" = 3 containers; "12.5 MT" = 12500 kg (compare container_count and gross_weight_kg numerically)
+  - Company names match when they differ only by suffix/punctuation (e.g. "ACME PTE LTD" = "Acme Pte. Ltd.")
 - Ignore differences in case, whitespace, punctuation, and common formatting.
 - If values are semantically equivalent, consider them matched.
 - If they are not equivalent, identify which of the 7 labels are incorrect or missing.
 
-Use these 7 labels exactly:
-- shipment_id
+Use these 7 labels exactly (the canonical fields produced by backend/extract.py):
+- shipper
+- consignee
+- notify_party
 - port_of_loading
 - port_of_discharge
-- carrier
-- product
-- quantity
-- delivery_date
+- container_count
+- gross_weight_kg
 
 Return valid JSON matching this schema:
 {{

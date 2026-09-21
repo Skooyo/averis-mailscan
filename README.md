@@ -11,6 +11,21 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Database (MongoDB) + frontend
+
+```bash
+docker compose up -d                     # local MongoDB on :27017 (container: averis-mongo)
+cd frontend
+cp .env.example .env                     # MONGODB_URI=mongodb://localhost:27017, MONGODB_DB=averis
+npm install
+npm run ingest                           # inbox/ + data/classifications.json -> emails / attachments collections
+npm run dev                              # http://localhost:3000
+```
+
+`npm run ingest -- --dry-run` prints the summary without writing. Ingest is
+re-runnable (emails are upserted on `(owner, id)`). Expected: 520 emails,
+250 attachments.
+
 ## Pipeline
 
 ```

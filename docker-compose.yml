@@ -1,0 +1,20 @@
+# Local MongoDB for the frontend (frontend/src/lib/mongodb.ts, scripts/ingest.ts).
+#   docker compose up -d
+#   cd frontend && cp .env.example .env   # MONGODB_URI=mongodb://localhost:27017
+#   npm run ingest                         # inbox/ + data/classifications.json -> emails/attachments collections
+services:
+  mongo:
+    image: mongo:7
+    container_name: averis-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - averis-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  averis-mongo-data:

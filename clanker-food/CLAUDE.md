@@ -34,10 +34,11 @@ for attachment text.
 - **Backend**: Python + FastAPI (pairs with `loader.py`)
 - **Classification & extraction**: LLM API with structured/JSON output —
   not regex-only (breaks on label variants by design)
-- **DB**: Postgres — store every email + result, spam included, for
-  auditability
+- **DB**: MongoDB (mongoose, `frontend/src/models/`) — store every email +
+  result, spam included, for auditability. Local: `docker compose up -d`
+  (`averis-mongo` on :27017); prod: MongoDB Atlas via `MONGODB_URI`
 - **Frontend**: React/Next.js on Vercel
-- **Deploy**: Supabase (backend) + Vercel (frontend) — **deploy a
+- **Deploy**: MongoDB Atlas (DB) + Vercel (frontend) — **deploy a
   skeleton on day 1**, iterate on a live public URL. Never leave deployment
   to the last 2 hours.
 - **Advanced stage only** (after basic works): `PyMuPDF` (PDF),
