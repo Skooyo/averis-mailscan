@@ -44,7 +44,7 @@ def convert_attachment(src: Path, out_dir: Path) -> ConversionResult:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out = converted_path(src, out_dir)
-    out.write_text(text, encoding="utf-8")
+    out.write_text(text, encoding="utf-8", newline="")
     return ConversionResult(source=str(src), ext=ext, output_path=str(out), chars=len(text))
 
 

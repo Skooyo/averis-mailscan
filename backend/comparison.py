@@ -432,6 +432,63 @@ def flatten_extraction(
     return flat
 
 
+class _FieldVerdict(BaseModel):
+    field: str = Field(description="Field name being judged")
+    matches: bool = Field(
+        description="True if the SI and BL values refer to the same real-world "
+        "value despite wording/formatting differences"
+    )
+    reasoning: str = Field(description="One short sentence")
+
+
+class _LLMCompareOutput(BaseModel):
+    verdicts: List[_FieldVerdict]
+
+
+_COMPARE_SYSTEM_PROMPT = """You are re-checking shipping document fields that a
+deterministic comparator already flagged as mismatched between a Shipping
+Instruction (SI) and a draft Bill of Lading (BL).
+
+For each field, decide whether the SI and BL values actually refer to the
+same real-world thing, just written differently (e.g. an address written in a
+different order, a port name spelled differently with no code to disambiguate,
+a company name with unusual punctuation the normalizer missed). Only mark
+matches=true when you are confident despite the wording difference -- a
+genuine discrepancy (different company, different port, different quantity)
+must stay matches=false. Never guess a match to be lenient."""
+
+
+async def compare_jsons(json_a: Dict[str, Any], json_b: Dict[str, Any]) -> Dict[str, Any]:
+    """LLM-assisted second opinion on fields backend.compare's deterministic
+    rules already flagged as mismatched.
+
+    json_a / json_b are the SI / BL values for ONLY the flagged fields (the
+    caller, compare_documents_with_fallback, narrows to that subset). Returns
+    the same {"status", "incorrect_or_missing", "details"} shape as
+    CompareResult.model_dump() so it can be consumed the same way.
+    """
+    from .llm import astructured_completion  # local import: optional dependency
+
+    fields = sorted(set(json_a) | set(json_b))
+    if not fields:
+        return {"status": "match", "incorrect_or_missing": [], "details": {}}
+
+    lines = [f"- {f}: SI={json_a.get(f)!r}  BL={json_b.get(f)!r}" for f in fields]
+    user = "Fields to re-check:\n" + "\n".join(lines)
+
+    output = await astructured_completion(_COMPARE_SYSTEM_PROMPT, user, _LLMCompareOutput)
+
+    verdict_by_field = {v.field: v.matches for v in output.verdicts}
+    still_mismatched = [f for f in fields if not verdict_by_field.get(f, False)]
+    details = {f: FieldDifference(si=json_a.get(f), bl=json_b.get(f)).model_dump() for f in still_mismatched}
+
+    return {
+        "status": "match" if not still_mismatched else "mismatch",
+        "incorrect_or_missing": still_mismatched,
+        "details": details,
+    }
+
+
 async def compare_documents_with_fallback(
     si: Dict[str, Any],
     bl: Dict[str, Any],
