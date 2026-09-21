@@ -20,7 +20,7 @@ const users = [
 
 type SeedEmail = {
   owner: string;
-  id: number;
+  id: string;
   category: "comparison_request" | "new_si_request" | "invoice_query" | "general" | "spam";
   from: string;
   subject: string;
@@ -32,7 +32,7 @@ type SeedEmail = {
 const emails: SeedEmail[] = [
   {
     owner: "alice@example.com",
-    id: 1,
+    id: "email_001",
     category: "comparison_request",
     from: "aziztz@safqa.co.ke",
     subject: "TO CONFIRM DOCS _ 5RSG-00133 _ CALLAO_PERU _ MOORIM SP CO., LTD _ MEDUUD104332",
@@ -41,7 +41,7 @@ const emails: SeedEmail[] = [
   },
   {
     owner: "alice@example.com",
-    id: 2,
+    id: "email_002",
     category: "new_si_request",
     from: "ops@paperone.example",
     subject: "SI for OC 5RSG-00201 _ PORT KLANG to ROTTERDAM",
@@ -50,7 +50,7 @@ const emails: SeedEmail[] = [
   },
   {
     owner: "alice@example.com",
-    id: 3,
+    id: "email_003",
     category: "invoice_query",
     from: "billing@carrier.example",
     subject: "Query on invoice INV-88231",
@@ -58,21 +58,21 @@ const emails: SeedEmail[] = [
   },
   {
     owner: "alice@example.com",
-    id: 4,
+    id: "email_004",
     category: "general",
     from: "noreply@rpa.example",
     subject: "Billing process completed - no action required",
   },
   {
     owner: "alice@example.com",
-    id: 5,
+    id: "email_005",
     category: "spam",
     from: "support@prize-claims.info",
     subject: "You have won! Claim your reward now",
   },
   {
     owner: "bob@example.com",
-    id: 1, // ids are per owner, so this doesn't clash with alice's id 1
+    id: "email_001", // ids are per owner, so this doesn't clash with alice's email_001
     category: "comparison_request",
     from: "docs@shipper.example",
     subject: "Draft BL check - MEDUUD104999",
@@ -81,7 +81,7 @@ const emails: SeedEmail[] = [
   },
   {
     owner: "bob@example.com",
-    id: 2,
+    id: "email_002",
     category: "general",
     from: "customer@example.org",
     subject: "Please send the draft BL for OC 5RSG-00310 for checking",
@@ -101,7 +101,14 @@ async function main() {
   for (const { docs = [], ...email } of emails) {
     // Attachments first so the email can hold their _ids.
     const attachments = await Attachment.insertMany(
-      docs.map((doc) => ({ doc, email_id: email.id, user_email: email.owner })),
+      docs.map((doc_type) => ({
+        doc_type,
+        filename: `${email.id}_${doc_type}.txt`,
+        content_type: "text/plain",
+        attachment: Buffer.from(`Example ${doc_type} for ${email.id}\n`),
+        email_id: email.id,
+        user_email: email.owner,
+      })),
     );
     await Email.create({
       ...email,

@@ -12,7 +12,7 @@ export const EMAIL_CATEGORIES = [
 const emailSchema = new Schema(
   {
     owner: { type: String, required: true, lowercase: true, trim: true }, // User.email
-    id: { type: Number, required: true }, // unique per owner, not globally
+    id: { type: String, required: true }, // unique per owner, not globally (e.g. "email_001" or a Gmail message id)
     category: { type: String, enum: EMAIL_CATEGORIES, required: true },
     // Only set for SI/BL emails. `default: undefined` keeps the field absent
     // instead of Mongoose's default empty array.
@@ -23,6 +23,7 @@ const emailSchema = new Schema(
     body: String, // only set for SI/BL emails
     from: String,
     subject: String,
+    confidence: Number, // classification confidence score
   },
   // `id: false` stops Mongoose adding its own `id` virtual over our `id` field.
   { id: false, timestamps: true },
