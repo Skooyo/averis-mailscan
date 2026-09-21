@@ -10,7 +10,7 @@ ReadResult = tuple[str | None, str | None]  # (text, read_error)
 
 
 def _read_txt(path: Path) -> str:
-    return path.read_text(errors="replace")
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def _read_pdf(path: Path) -> str:
