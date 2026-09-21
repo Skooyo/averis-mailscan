@@ -9,6 +9,7 @@ from backend.extract import Extraction, ExtractedField
 from backend.models import Attachment, Classification, Email
 from backend.pipeline import (
     compare_si_vs_bl,
+    dedupe_attachments,
     main,
     process_comparison_requests,
     run_pipeline,
@@ -206,6 +207,94 @@ async def test_compare_si_vs_bl_ignores_other_emails_cached_in_shared_extraction
 
 
 # ---------------------------------------------------------------------------
+# dedupe_attachments -- same document attached twice under different names
+# ---------------------------------------------------------------------------
+
+def test_dedupe_attachments_collapses_identical_content():
+    a = _attachment("a.txt", text="same content")
+    b = _attachment("b.txt", text="same content")
+
+    kept, duplicates = dedupe_attachments([a, b])
+
+    assert [x.path for x in kept] == ["a.txt"]
+    assert duplicates == {"a.txt": ["b.txt"]}
+
+
+def test_dedupe_attachments_keeps_distinct_content():
+    a = _attachment("a.txt", text="content A")
+    b = _attachment("b.txt", text="content B")
+
+    kept, duplicates = dedupe_attachments([a, b])
+
+    assert [x.path for x in kept] == ["a.txt", "b.txt"]
+    assert duplicates == {}
+
+
+def test_dedupe_attachments_does_not_treat_unreadable_attachments_as_duplicates():
+    a = _attachment("a.pdf", text=None, read_error="pdf_no_text_layer")
+    b = _attachment("b.pdf", text=None, read_error="pdf_no_text_layer")
+
+    kept, duplicates = dedupe_attachments([a, b])
+
+    assert [x.path for x in kept] == ["a.pdf", "b.pdf"]
+    assert duplicates == {}
+
+
+def test_dedupe_attachments_groups_multiple_duplicates_under_first_occurrence():
+    a = _attachment("a.txt", text="same content")
+    b = _attachment("b.txt", text="same content")
+    c = _attachment("c.txt", text="same content")
+
+    kept, duplicates = dedupe_attachments([a, b, c])
+
+    assert [x.path for x in kept] == ["a.txt"]
+    assert duplicates == {"a.txt": ["b.txt", "c.txt"]}
+
+
+@pytest.mark.asyncio
+async def test_compare_si_vs_bl_dedupes_before_extraction_and_reports_it(monkeypatch):
+    si_attachment = _attachment("si.txt", text="SI text")
+    si_duplicate = _attachment("si_copy.txt", text="SI text")  # same content, different name
+    bl_attachment = _attachment("bl.txt", text="BL text")
+
+    received_attachments = []
+
+    async def fake_extract_all(attachments, **kwargs):
+        received_attachments.extend(attachments)
+        return {
+            "si.txt": _extraction("SI", shipper="ACME PTE LTD"),
+            "bl.txt": _extraction("BL", shipper="ACME PTE LTD"),
+        }
+
+    monkeypatch.setattr("backend.pipeline.extract_all", fake_extract_all)
+
+    result = await compare_si_vs_bl([si_attachment, si_duplicate, bl_attachment])
+
+    # the duplicate never reached extract_all -- no wasted extraction call
+    assert [a.path for a in received_attachments] == ["si.txt", "bl.txt"]
+    assert result["status"] == "match"
+    assert result["duplicate_attachments"] == {"si.txt": ["si_copy.txt"]}
+
+
+@pytest.mark.asyncio
+async def test_compare_si_vs_bl_without_duplicates_has_no_duplicate_key(monkeypatch):
+    si_attachment = _attachment("si.txt", text="SI text")
+    bl_attachment = _attachment("bl.txt", text="BL text")
+
+    async def fake_extract_all(attachments, **kwargs):
+        return {
+            "si.txt": _extraction("SI", shipper="ACME PTE LTD"),
+            "bl.txt": _extraction("BL", shipper="ACME PTE LTD"),
+        }
+
+    monkeypatch.setattr("backend.pipeline.extract_all", fake_extract_all)
+
+    result = await compare_si_vs_bl([si_attachment, bl_attachment])
+
+    assert "duplicate_attachments" not in result
+
+
+# ---------------------------------------------------------------------------
 # process_comparison_requests -- classify.py -> compare_si_vs_bl dispatcher
 # ---------------------------------------------------------------------------
 
@@ -214,7 +303,9 @@ def _email(email_id: str, *attachments: Attachment) -> Email:
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_only_processes_comparison_request_emails(monkeypatch):
+async def test_dispatcher_only_compares_comparison_request_emails_but_returns_every_email(
+    monkeypatch, tmp_path
+):
     emails = [
         _email("e1", _attachment("si.txt"), _attachment("bl.txt")),
         _email("e2", _attachment("foo.txt")),
@@ -234,15 +325,30 @@ async def test_dispatcher_only_processes_comparison_request_emails(monkeypatch):
 
     monkeypatch.setattr("backend.pipeline.compare_si_vs_bl", fake_compare_si_vs_bl)
 
-    results = await process_comparison_requests(emails, classifications)
+    results = await process_comparison_requests(
+        emails, classifications, cache_path=tmp_path / "extractions.json"
+    )
 
-    assert set(results) == {"e1"}
+    # Every email gets an entry now, not just comparison_request ones.
+    assert set(results) == {"e1", "e2", "e3"}
     assert results["e1"]["status"] == "match"
-    assert calls == [["si.txt", "bl.txt"]]
+    assert results["e1"]["category"] == "comparison_request"
+    assert calls == [["si.txt", "bl.txt"]]  # compare only ran for e1
+
+    assert results["e2"]["status"] == "skipped"
+    assert results["e2"]["category"] == "invoice_query"
+
+    assert results["e3"]["status"] == "unclassified"
+    assert results["e3"]["category"] is None
+
+    # Every email also gets an escalation verdict.
+    for record in results.values():
+        assert "escalation" in record and "required" in record["escalation"]
+    assert results["e3"]["escalation"]["required"] is True  # unclassified
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_captures_failure_without_halting_batch(monkeypatch):
+async def test_dispatcher_captures_failure_without_halting_batch(monkeypatch, tmp_path):
     emails = [
         _email("e1", _attachment("si.txt")),  # missing BL
         _email("e2", _attachment("si2.txt"), _attachment("bl2.txt")),
@@ -260,12 +366,18 @@ async def test_dispatcher_captures_failure_without_halting_batch(monkeypatch):
 
     monkeypatch.setattr("backend.pipeline.compare_si_vs_bl", fake_compare_si_vs_bl)
 
-    results = await process_comparison_requests(emails, classifications)
+    results = await process_comparison_requests(
+        emails, classifications, cache_path=tmp_path / "extractions.json"
+    )
 
     assert results["e1"]["status"] == "error"
     assert "Could not uniquely identify" in results["e1"]["message"]
+    assert results["e1"]["escalation"]["required"] is True
+    reasons = [r["code"] for r in results["e1"]["escalation"]["reasons"]]
+    assert "ambiguous_si_bl" in reasons
     # e2 still got processed even though e1 failed
     assert results["e2"]["status"] == "match"
+    assert results["e2"]["escalation"]["required"] is False
 
 
 @pytest.mark.asyncio
@@ -436,7 +548,7 @@ def test_summarize_comparisons_counts_and_lists_problems():
 
     report = summarize_comparisons(results)
 
-    assert "comparison_request emails processed: 3" in report
+    assert "emails processed: 3" in report
     assert "match: 1" in report
     assert "mismatch: 1" in report
     assert "error: 1" in report
@@ -462,7 +574,7 @@ def test_main_parses_data_dir_and_limit_positional_args(monkeypatch, tmp_path, c
 
     assert captured["data_dir"] == tmp_path
     assert captured["limit"] == 5
-    assert "comparison_request emails processed: 0" in capsys.readouterr().out
+    assert "emails processed: 0" in capsys.readouterr().out
 
 
 def test_main_without_limit_arg_defaults_to_none(monkeypatch, tmp_path):

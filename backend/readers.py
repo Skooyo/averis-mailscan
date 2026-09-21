@@ -21,7 +21,23 @@ def _read_pdf(path: Path) -> str:
 
     with pdfplumber.open(path) as pdf:
         pages = [page.extract_text() or "" for page in pdf.pages]
-    return "\n\n".join(pages)
+    text = "\n\n".join(pages)
+
+    if not text.strip():
+        # Image-only scanned PDF -- pdfplumber found no text layer. Try
+        # Document AI OCR before giving up; if it's not configured in this
+        # environment, fall through to the pdf_no_text_layer read_error as
+        # before. Any other OCR failure (bad creds, quota, network) is left
+        # to propagate so it becomes its own read_error instead of being
+        # masked as "no text layer".
+        from .ocr import OCRUnavailable, ocr_pdf
+
+        try:
+            text = ocr_pdf(path)
+        except OCRUnavailable:
+            pass
+
+    return text
 
 
 def _read_xlsx(path: Path) -> str:

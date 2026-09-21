@@ -1,12 +1,14 @@
 # TODO
 
-_Last updated: 2026-09-22, after a full status audit against the actual
-codebase. Classification has been run on the full 520-email inbox (not just
-5), PDF/XLSX/DOCX reading was already implemented (contrary to what this file
-previously said), and the `compare_jsons` ImportError below has been fixed.
-Also: `backend/llm.py` no longer uses Groq — it now calls the Vercel AI
-Gateway (`AI_GATEWAY_API_KEY`), the same provider the frontend's Gmail-sync
-classifier already used, so the whole app is on one key/provider._
+_Last updated: 2026-09-22 (third pass same day). Second pass implemented
+HANDOVER.md's plan items #1, #2, and #7 (every email in pipeline output,
+`backend/escalate.py`, OCR fallback). This pass closed out four remaining
+items: retry/correction workflows (`backend/review.py`), duplicate-
+attachment handling (`backend/pipeline.py::dedupe_attachments`), and two
+classification test gaps (offline regression tests + a review of
+classification beyond the 45-email labelled sample). See "Known issues
+(fixed)" at the bottom for what's newly done and what's still open within
+each._
 
 ## 🔴 Blocking — do these two first
 
@@ -40,10 +42,12 @@ classifier already used, so the whole app is on one key/provider._
 - [ ] `sample_submission.json` — not yet shared
 - [ ] `loader.py` — not yet shared
 - [ ] Confirm the required submission schema
-- [ ] Ensure every `email_id` is included in the final output — **currently
-      NOT true**: `run_pipeline`/`process_comparison_requests` only return
-      entries for emails classified `comparison_request`; every other
-      category is silently absent from the result dict.
+- [x] Ensure every `email_id` is included in the final output — **fixed**:
+      `process_comparison_requests` now writes an entry for every email
+      regardless of category (`status="skipped"` with the category named,
+      or `status="unclassified"` if classification is missing); only
+      `comparison_request` emails still go through `compare_si_vs_bl`.
+      Live-verified against `email_004`/`email_507` (see bottom of file).
 
 ## 2. Email classification
 
@@ -54,12 +58,38 @@ classifier already used, so the whole app is on one key/provider._
       new_si_request 125, invoice_query 75, spam 40), 0 below the 0.6
       confidence floor. Confirmed against the labelled sample
       (`tests/labels_sample.json`, 45 emails) via `test_live_gateway_classification`.
-- [ ] Add regression tests for representative examples — none yet, only
-      mocked unit tests of the dispatcher logic exist (the one live test,
-      `test_live_gateway_classification`, checks 3 emails and is skipped
-      without an `AI_GATEWAY_API_KEY`)
-- [ ] Review classification errors against the problem statement — not done
-      beyond the 45-email labelled sample
+- [x] Add regression tests for representative examples — **done**, and
+      offline (reads `data/classifications.json`, zero LLM calls, so these
+      run on every `pytest tests/`, not just when `AI_GATEWAY_API_KEY` is
+      set). `tests/test_classify.py` now has:
+  - `test_full_labelled_sample_matches_cached_classification` — turns the
+    manual `cli eval-classify` report into a real assertion (all 45/45,
+    still passing).
+  - `test_representative_classification_examples` — 6 parametrized cases,
+    each naming *why* it's tricky, referencing HANDOVER.md's own dataset
+    findings (shuffled subjects, RPA no-action notices, "assist to send"
+    vs. comparison, "revert with draft BL" closings, spam domains, missing
+    attachments not changing category).
+  - `test_no_attachment_assist_send_draft_emails_are_classified_general`,
+    `test_inline_si_request_emails_are_classified_new_si_request`,
+    `test_rpa_billing_no_action_notices_are_classified_general` — each
+    scans the **full inbox** (not just the labelled 45) for its pattern via
+    regex and checks every match against the cache, so these three
+    documented gotchas are now regression-tested at their real scale
+    (~90, ~70, and 15 matching emails respectively), not just the 1-2
+    examples that happened to make the labelled sample.
+- [x] Review classification errors against the problem statement —
+      **done for this pass**: confirmed all 21 edge-case emails
+      (`email_500`-`520`) classify consistently (500 → `invoice_query`,
+      501-520 → `comparison_request`, 0.92-0.99 confidence) and locked
+      that in as `test_edge_case_emails_500_to_520_land_in_documented_categories`.
+      Also spot-checked the 8 lowest-confidence classifications *outside*
+      the labelled sample (all still 0.92+, e.g. `email_080`/`email_220` —
+      "asks to send the draft BL for checking, not a comparison request")
+      — reasoning holds up against the category definitions, no
+      misclassification pattern found. Not exhaustive: the other ~470
+      un-labelled emails still haven't been individually hand-checked,
+      just pattern-matched and confidence-scanned.
 
 ## 3. Attachment handling
 
@@ -67,13 +97,32 @@ classifier already used, so the whole app is on one key/provider._
 - [x] Identify the SI and draft BL for comparison requests —
       `compare_si_vs_bl` auto-detects via `Extraction.doc_type_detected`,
       raises loudly on ambiguity instead of guessing
-- [ ] Handle missing, duplicated, or ambiguous attachments — **detected**
-      (raises `ValueError`), not yet **handled**: no dedup logic, and a
-      raised error still needs to become a proper escalation (§6) rather
-      than a bare caught exception
-- [ ] Add clear errors for unreadable attachments — `read_error` is
-      already captured by `readers.py`/`ingest.py`; still needs wiring
-      into escalation once `escalate.py` exists
+- [x] Handle missing, duplicated, or ambiguous attachments — **done**. An
+      ambiguous SI/BL `ValueError` becomes a proper
+      `escalation.reasons[].code == "ambiguous_si_bl"` entry instead of a
+      bare caught exception (see §6) — live-verified on `email_507`.
+      Duplicate handling: `backend.pipeline.dedupe_attachments()` collapses
+      attachments with byte-identical text (the same document attached
+      twice under different filenames, or the same path listed twice)
+      down to one representative *before* extraction runs — avoids a
+      wasted extraction call, and avoids a false `ambiguous_si_bl`
+      escalation when it's actually one document, not two. Dropped
+      duplicates are recorded as evidence in the result's
+      `duplicate_attachments` key (`{kept_key: [dropped_key, ...]}`), not
+      silently discarded. 6 tests. Not done on this dataset's real 520
+      emails specifically because none of them actually contain a
+      duplicate attachment (checked) — this is defensive, matching the
+      project's existing pattern of building for the general case even
+      when today's data doesn't exercise it (see `_read_txt`'s strict
+      UTF-8 handling in HANDOVER.md).
+- [x] Add clear errors for unreadable attachments — `read_error` is
+      captured by `readers.py`/`ingest.py`, including genuinely malformed
+      `.txt` bytes (fixed: `_read_txt` no longer silently substitutes
+      `�` via `errors="replace"`; it now raises so `read_attachment`
+      turns it into a proper `read_error`, tested, and confirmed against
+      all 192 real `.txt` attachments — none are actually malformed, so
+      this only tightens behavior for hypothetical bad input). Still needs
+      wiring into escalation once `escalate.py` exists.
 
 ## 4. Data extraction
 
@@ -85,11 +134,12 @@ classifier already used, so the whole app is on one key/provider._
       correctly (confirmed via manual inspection of `email_004`), but not
       validated against the full dataset yet
 - [x] Add extraction unit tests — `test_extract.py`, 10 tests passing
-- [ ] Escalate missing or low-confidence values instead of guessing —
-      **partial**: `flatten_extraction(confidence_threshold=...)` can mask
-      a low-confidence value to `None`, but that's not escalation — it
-      just makes the field look like an ordinary missing value, with no
-      reason recorded and no path to a human. Real fix is §6.
+- [x] Escalate missing or low-confidence values instead of guessing —
+      **fixed**: `backend/escalate.py::evaluate_email` reads the extraction
+      cache directly (independent of `flatten_extraction`'s masking) and
+      raises `missing_extracted_field` / `low_confidence_extraction`
+      reasons per field, with the attachment path and field name as
+      evidence. See §6.
 
 ## 5. Deterministic comparison
 
@@ -118,26 +168,79 @@ classifier already used, so the whole app is on one key/provider._
 
 ## 6. Human escalation
 
-- [ ] Add `backend/escalate.py` — **does not exist yet; biggest real gap
-      in the pipeline right now**
-- [ ] Escalate when:
-  - [ ] Attachments are missing
-  - [ ] Documents are unreadable
-  - [ ] Required fields are missing
-  - [ ] Extraction confidence is low
-  - [ ] Values are ambiguous
-  - [ ] Processing fails — currently `process_comparison_requests` catches
-        this as `{"status": "error", "message": str(exc)}`, which needs to
-        become a real escalation record, not just a caught exception
-- [ ] Include email ID, evidence, extracted values, and escalation reason
-- [ ] Support retry and human correction workflows
+- [x] Add `backend/escalate.py` — **done**. Rules-based, no LLM calls:
+      `evaluate_email(email, classification, result, extraction_cache)` ->
+      `EscalationReport(required, reasons=[{code, detail}, ...])`.
+      `annotate_with_escalation()` adds an `"escalation"` key to every
+      email's result record in `pipeline.process_comparison_requests`;
+      `escalation_queue(results)` filters to the ones needing review.
+      21 unit tests in `tests/test_escalate.py`.
+- [x] Escalate when:
+  - [x] Attachments are missing (`missing_attachment`, for
+        `comparison_request`/`new_si_request` categories with zero
+        attachments)
+  - [x] Documents are unreadable (`unreadable_attachment`, one per
+        attachment with a `read_error`)
+  - [x] Required fields are missing (`missing_extracted_field`, read
+        straight from the extraction cache)
+  - [x] Extraction confidence is low (`low_confidence_extraction`, floor
+        0.5, configurable via `field_confidence_floor`)
+  - [x] Values are ambiguous (`ambiguous_si_bl` — specifically detects
+        `compare_si_vs_bl`'s "Could not uniquely identify" `ValueError`
+        message; live-verified on `email_507`, the missing-BL edge case)
+  - [x] Processing fails — `process_comparison_requests`'s catch block now
+        tags the category and feeds the error message into escalation
+        (`processing_error` for anything else); the bare
+        `{"status": "error", "message": ...}` shape is unchanged for
+        backward-compat, `escalation` is just an added key
+  - [x] Classification is missing or low-confidence (`unclassified` /
+        `low_confidence_classification`, floor 0.6) — not in the original
+        list but a clear gap otherwise: an unclassified email would
+        silently fall into "skipped" with no signal anything was wrong
+- [x] Include email ID, evidence, extracted values, and escalation reason —
+      each reason's `detail` string carries the evidence (attachment path +
+      read_error, field name + confidence, or the raw exception message);
+      `email_id` is the result dict's key
+- [x] Support retry and human correction workflows — **library-level done**
+      in new `backend/review.py` (12 tests, `tests/test_review.py`):
+  - `retry_email(email, classification, ...)` — re-runs comparison for one
+    email, evicting only *that email's* attachments from the extraction
+    cache first (not `extract_all(force=True)`, which would blow away
+    every other email's cached extraction too). Rejects non-
+    `comparison_request` categories loudly rather than silently no-op'ing.
+  - `retry_and_reannotate(...)` — the single call a review UI/CLI would
+    make: retries, then re-runs `escalate.evaluate_email` so the result
+    and its escalation verdict never drift out of sync.
+  - `record_correction(email_id, field, value, note=...)` /
+    `load_corrections()` — a persisted ledger (`data/corrections.json`,
+    same cache-file pattern as classifications/extractions) of human
+    overrides, each with who/why/when.
+  - `apply_corrections(results, corrections)` — overlays a correction onto
+    a result: a `category` correction overrides it directly; a field
+    correction resolves it out of `incorrect_or_missing`/`details` and
+    flips `status` back to `match` once nothing's left outstanding.
+    Always logged to `result["corrections"]` and marks
+    `escalation.resolved = True` — the original `reasons` stay as a
+    historical record of what was originally wrong.
+  - `mark_resolved(...)` for the "human looked at it, it's fine as-is, no
+    value needs changing" case.
+  - **Still open**: no CLI or API surface calls these yet. Deliberately
+    not built this pass — a reviewer needs to look up a *persisted*
+    `email_id -> result` store to know what to retry/correct, and that
+    store's shape depends on the still-missing `sample_submission.json`
+    schema (the 🔴 blocking item). Building a CLI against a guessed shape
+    risked having to redo it once the real schema lands. These functions
+    are the primitives that CLI/API will call once #4 in the plan is
+    unblocked.
 
 ## 7. End-to-end pipeline
 
 - [x] Implement `inbox → classify → identify attachments → extract → compare`
       (`run_pipeline` in `pipeline.py`)
-- [ ] Extend to the full `... → escalate → report` — escalate step missing
-      (§6); report currently omits non-comparison_request emails (§1)
+- [x] Extend to the full `... → escalate → report` — **done**: escalate step
+      (§6) now runs inside `process_comparison_requests` after the base
+      result is built for every email; report no longer omits
+      non-comparison_request emails (§1)
 - [x] Process non-comparison emails without unnecessary extraction —
       `process_comparison_requests` filters by category before calling
       `extract_all`
@@ -174,6 +277,61 @@ classifier already used, so the whole app is on one key/provider._
   recorded — caught live by 4 failing `test_convert.py` cases (txt, pdf,
   xlsx, docx all affected). Fixed by writing with `newline=""`; all 8
   `test_convert.py` tests now pass.
+- **`process_comparison_requests` silently dropping every non-
+  `comparison_request` email (fixed).** Every email now gets a result
+  entry: `comparison_request` emails still go through `compare_si_vs_bl`;
+  everything else gets `status="skipped"` (with its category) or
+  `status="unclassified"` (no classification at all). 2 new
+  `test_pipeline.py` cases cover this; 2 existing ones updated. Live-
+  verified: running the real pipeline on `email_004` + `email_507`
+  reproduced the documented `email_004` mismatch (`consignee`/
+  `notify_party`) and the documented `email_507` missing-BL ambiguity,
+  both correctly landing in the output with no dropped emails.
+- **`compare_si_vs_bl`'s ambiguous-SI/BL `ValueError` and other processing
+  failures were bare caught exceptions with no path to a human (fixed).**
+  `backend/escalate.py` now classifies them: "Could not uniquely identify"
+  becomes `ambiguous_si_bl`, anything else becomes `processing_error`.
+  Confirmed live on `email_507`.
+- **Scanned PDFs (`email_512`–`514`) had no OCR path (fixed in code; not
+  yet live-verified end-to-end).** `readers.py::_read_pdf` now calls
+  `backend/ocr.py::ocr_pdf` whenever pdfplumber's own pass finds no text.
+  Live-checked against `attachments/email_512_SI.pdf`: the Document AI
+  config (`PROJECT_ID`/`PROCESSOR_ID`/`LOCATION`) is present and the code
+  reaches the real API, but this machine has no GCP Application Default
+  Credentials, so it currently fails with `DefaultCredentialsError` —
+  correctly surfaced as a `read_error` string rather than crashing or
+  silently masking as `pdf_no_text_layer`, but real OCR text hasn't
+  actually been produced from a live call yet. Whoever owns the GCP
+  project needs to run `gcloud auth application-default login` (or set
+  `GOOGLE_APPLICATION_CREDENTIALS` to a service account key) before this
+  can be confirmed working end-to-end.
+- **Duplicate attachments weren't handled (fixed).** Same document
+  attached twice under different filenames would have been extracted
+  twice (wasted LLM calls) and could trip a false `ambiguous_si_bl`
+  escalation (looks like "2 SI-typed attachments" when it's actually one).
+  `backend.pipeline.dedupe_attachments()` collapses by content hash before
+  extraction runs; dropped duplicates are recorded in the result's
+  `duplicate_attachments` key. Confirmed none of the real 520 emails
+  actually contain a duplicate attachment (hashed every attachment file
+  and checked for collisions within each email) — this fix is defensive
+  for input this specific dataset doesn't happen to exercise.
+- **Escalation was read-only, with no way for a human to act on it
+  (fixed).** New `backend/review.py`: `retry_email`/`retry_and_reannotate`
+  re-run comparison for one email (evicting only its own cached
+  attachments, not the whole extraction cache); `record_correction` /
+  `apply_corrections` let a human override a value and have it resolve the
+  mismatch and flip status back to match; `mark_resolved` acknowledges an
+  escalation without changing anything. No CLI/API wired up yet — see §6
+  for why that's deliberately deferred.
+- **No automated regression coverage for classification beyond the
+  45-email labelled sample (fixed).** Added offline tests (read
+  `data/classifications.json`, zero LLM cost) covering the full labelled
+  sample as a real assertion, 6 individually-named tricky cases from
+  HANDOVER's dataset findings, three inbox-wide pattern checks (~90 "send
+  draft BL" emails, ~70 inline-SI emails, RPA no-action notices), and all
+  21 of the `email_500`–`520` edge cases. Also spot-checked the 8
+  lowest-confidence classifications outside the labelled sample by hand —
+  all correctly reasoned, no misclassification pattern found (see §2).
 
 ## 8. Submission and evaluation
 
@@ -209,19 +367,36 @@ still missing escalation and full-dataset coverage._
       tables, same tests
 - [x] Add table/table-layout handling — `_read_xlsx` (openpyxl) and the
       table-row extraction in `_read_docx` already flatten tables to text
-- [ ] Add OCR or vision-based extraction for scanned documents — **not
-      started**. `email_512`–`514` are image-only scanned PDFs that hit
-      `pdf_no_text_layer`; `OCRApi.py` at repo root is an unwired Document AI
-      experiment on one hard-coded file, not integrated into `readers.py`
+- [x] Add OCR or vision-based extraction for scanned documents — **wired,
+      but unverified end-to-end in this environment.** `backend/ocr.py`
+      generalizes `OCRApi.py`'s one-off experiment (which hard-coded one
+      file and read `.entities` off a form-parser processor) into
+      `ocr_pdf(path)`, using `Document.text` instead so it works as a
+      generic fallback for any scanned PDF. `readers.py::_read_pdf` calls
+      it automatically whenever pdfplumber's own pass comes back empty;
+      `OCRUnavailable` (env vars unset) falls through to the old
+      `pdf_no_text_layer` behavior unchanged, any other failure (bad
+      creds, quota, network) becomes its own `read_error` instead of being
+      masked. 9 mocked tests (`tests/test_ocr.py`, `tests/test_readers.py`).
+      **Live-checked against `attachments/email_512_SI.pdf`: `PROJECT_ID`/
+      `PROCESSOR_ID`/`LOCATION` are set in `.env` and the code path reaches
+      Document AI correctly, but this machine has no Google Application
+      Default Credentials configured, so the live call fails with
+      `DefaultCredentialsError` (surfaced correctly as a `read_error`, not
+      a crash — but real OCR text was never actually produced here).
+      Whoever has the GCP service account for this project needs to set
+      `GOOGLE_APPLICATION_CREDENTIALS` (or run `gcloud auth application-
+      default login`) before `email_512`–`514` will actually OCR.**
 - [ ] Test misleading subjects and missing-attachment edge cases end-to-end —
       `email_500`–`520` are the dataset's deliberate edge cases (dropped
       attachments, corrupt PDFs, blank SI fields, packing list mislabelled
       as BL) but nothing has run extraction/comparison against them yet
       (§4 — no full extraction run)
 
-_Partially done — PDF/DOCX/XLSX reading was already built (contrary to what
-this file previously said); OCR for scanned documents is the real remaining
-gap._
+_Mostly done — PDF/DOCX/XLSX reading was already built, and the OCR fallback
+is now wired end-to-end in code. The remaining gap is environmental, not
+code: this machine has no GCP Application Default Credentials, so
+`email_512`–`514` can't be live-verified as actually OCR'd yet (see above)._
 
 ## 11. Documentation and cleanup
 
@@ -240,11 +415,23 @@ gap._
 2. [ ] Share `sample_submission.json` + `loader.py` (🔴 blocking §1/§8)
 3. [x] ~~Implement deterministic comparison~~ — done
 4. [x] ~~Add comparison tests~~ — done
-5. [ ] Build `backend/escalate.py` (§6) — biggest remaining piece of real work
+5. [x] ~~Build `backend/escalate.py`~~ (§6) — done, rules-based, no LLM
+       calls, wired into the pipeline
 6. [ ] Run extraction over the full inbox — still only ever run in small
-       batches; `data/extractions.json` doesn't exist yet (§4)
-7. [ ] Extend `run_pipeline` to include every email (not just
-       `comparison_request`) in its output, plus the escalate step (§1, §7)
+       batches (now 3 real attachments cached from this session's live
+       checks: `email_004_SI/BL`, `email_507_SI`); `data/extractions.json`
+       still needs the other ~247 attachments (§4)
+7. [x] ~~Extend `run_pipeline` to include every email (not just
+       `comparison_request`) in its output, plus the escalate step~~
+       (§1, §7) — done
 8. [ ] Generate and evaluate submissions (§8, once #2 is answered)
 9. [ ] Connect the frontend (§9)
-10. [ ] Add OCR for scanned documents (§10) — the rest of §10 is done
+10. [x] ~~Add OCR for scanned documents~~ (§10) — wired and tested (mocked);
+       live end-to-end use blocked on GCP Application Default Credentials
+       not being set up on this machine, see §10 above
+11. [x] ~~Dedup logic for duplicated attachments~~ (§3) — done
+12. [x] ~~Retry and human correction workflows~~ (§6) — library-level
+       primitives done in `backend/review.py`; CLI/API surface still
+       needs the persisted results store #4/#8 unblocks
+13. [x] ~~Classification regression tests + review beyond the labelled
+       sample~~ (§2) — done, all offline/zero-cost

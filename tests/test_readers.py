@@ -175,6 +175,77 @@ def test_read_attachment_never_raises_on_reader_exception(tmp_path, monkeypatch)
     assert error == "RuntimeError: simulated parser crash"
 
 
+class _FakePdfNoTextLayer:
+    """Simulates pdfplumber.open() against an image-only scanned PDF."""
+
+    class _FakePage:
+        def extract_text(self):
+            return None
+
+    pages = [_FakePage()]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def test_read_pdf_falls_back_to_ocr_when_no_text_layer(tmp_path, monkeypatch):
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+    monkeypatch.setattr("backend.ocr.ocr_pdf", lambda path: "OCR recovered shipping text")
+
+    text, error = read_attachment(p)
+
+    assert error is None
+    assert text == "OCR recovered shipping text"
+
+
+def test_read_pdf_reports_pdf_no_text_layer_when_ocr_unconfigured(tmp_path, monkeypatch):
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    from backend.ocr import OCRUnavailable
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+
+    def raise_unavailable(path):
+        raise OCRUnavailable("not configured")
+
+    monkeypatch.setattr("backend.ocr.ocr_pdf", raise_unavailable)
+
+    text, error = read_attachment(p)
+
+    assert text is None
+    assert error == "pdf_no_text_layer"
+
+
+def test_read_pdf_propagates_real_ocr_failures_as_read_error(tmp_path, monkeypatch):
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+
+    def raise_real_error(path):
+        raise RuntimeError("Document AI quota exceeded")
+
+    monkeypatch.setattr("backend.ocr.ocr_pdf", raise_real_error)
+
+    text, error = read_attachment(p)
+
+    assert text is None
+    assert error == "RuntimeError: Document AI quota exceeded"
+
+
 def test_read_attachment_non_ascii_content_end_to_end(tmp_path):
     # Full regression test through the public entry point, not just _read_txt.
     p = tmp_path / "email_174_BL.txt"

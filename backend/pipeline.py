@@ -15,16 +15,65 @@ each to plain values, and hand them to the deterministic comparator.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .classify import classify_all
 from .comparison import compare_documents_with_fallback, flatten_extraction
+from .escalate import annotate_with_escalation
+from .extract import CACHE_PATH as EXTRACTION_CACHE_PATH
 from .extract import _attachment_key, extract_all
+from .extract import load_cache as load_extraction_cache
 from .ingest import load_inbox
 from .models import Classification, Email
+
+
+def _content_key(attachment: Any) -> Optional[str]:
+    """Hash of an attachment's text, for spotting the same document attached
+    twice under different filenames. None for unreadable attachments (no
+    text) -- two unreadable attachments aren't necessarily the same document,
+    so they're never treated as duplicates of each other.
+    """
+    text = getattr(attachment, "text", None)
+    if not text:
+        return None
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def dedupe_attachments(attachments: list) -> Tuple[list, Dict[str, List[str]]]:
+    """Collapse attachments with byte-identical text content down to one
+    representative each (first occurrence, by input order).
+
+    Without this, the same document attached twice under different names
+    (or the same path listed twice) gets extracted twice -- wasted LLM
+    calls -- and, worse, can make compare_si_vs_bl's SI/BL auto-detection
+    see "2 SI-typed attachments" and raise an ambiguous_si_bl escalation
+    for what's actually one document, not a real ambiguity.
+
+    Returns (kept_attachments, duplicate_groups) where duplicate_groups
+    maps each kept attachment's key to the keys of the attachments dropped
+    as its duplicates -- evidence, not a silent drop.
+    """
+    seen_content: Dict[str, str] = {}  # content hash -> kept attachment's key
+    kept: list = []
+    duplicate_groups: Dict[str, List[str]] = {}
+
+    for attachment in attachments:
+        content_key = _content_key(attachment)
+        own_key = _attachment_key(attachment)
+        if content_key is None:
+            kept.append(attachment)
+            continue
+        if content_key not in seen_content:
+            seen_content[content_key] = own_key
+            kept.append(attachment)
+        else:
+            duplicate_groups.setdefault(seen_content[content_key], []).append(own_key)
+
+    return kept, duplicate_groups
 
 
 async def compare_si_vs_bl(
@@ -40,15 +89,18 @@ async def compare_si_vs_bl(
 
     If si_attachment_key / bl_attachment_key are given, those attachment
     keys (as produced by extract._attachment_key -- typically the file
-    path) are used directly. Otherwise the SI and BL are auto-detected
-    from each Extraction's doc_type_detected field, and this raises
-    ValueError unless exactly one of each is found -- silently guessing
-    among multiple SI-looking or BL-looking attachments would be worse
-    than failing loudly.
+    path) are used directly -- note they must name a *kept* attachment,
+    not one collapsed as a duplicate of another (see dedupe_attachments).
+    Otherwise the SI and BL are auto-detected from each Extraction's
+    doc_type_detected field, and this raises ValueError unless exactly one
+    of each is found -- silently guessing among multiple SI-looking or
+    BL-looking attachments would be worse than failing loudly.
 
     extract_kwargs (concurrency, force, cache_path, progress) are passed
     straight through to extract_all.
     """
+    attachments, duplicate_groups = dedupe_attachments(attachments)
+
     extractions = await extract_all(attachments, **extract_kwargs)
 
     # extract_all's cache is persistent and shared across every call that
@@ -90,9 +142,12 @@ async def compare_si_vs_bl(
     si_fields = flatten_extraction(si_extraction, confidence_threshold=confidence_threshold)
     bl_fields = flatten_extraction(bl_extraction, confidence_threshold=confidence_threshold)
 
-    return await compare_documents_with_fallback(
+    result = await compare_documents_with_fallback(
         si_fields, bl_fields, use_llm_fallback=use_llm_fallback
     )
+    if duplicate_groups:
+        result["duplicate_attachments"] = duplicate_groups
+    return result
 
 
 async def process_comparison_requests(
@@ -105,8 +160,11 @@ async def process_comparison_requests(
     """The classify.py -> compare_si_vs_bl dispatcher.
 
     Runs compare_si_vs_bl for every email whose classification.category is
-    "comparison_request"; everything else (new_si_request, invoice_query,
-    general, spam, or an email with no classification at all) is skipped.
+    "comparison_request". Every other email -- new_si_request, invoice_query,
+    general, spam, or one with no classification at all -- still gets an
+    entry in the returned dict (status="skipped"/"unclassified"), since the
+    submission format needs every email_id present, not just the ones that
+    went through comparison.
 
     Per classify.py's own docstring, a comparison_request email can still be
     missing its BL, have unreadable attachments, or carry a packing list /
@@ -117,23 +175,47 @@ async def process_comparison_requests(
     comparison result already has, with status="error" and a message on
     failure -- matching the read_error convention the rest of this
     pipeline (readers.py) uses instead of raising.
+
+    Every result also gets an "escalation" key (backend/escalate.py):
+    {"required": bool, "reasons": [{"code", "detail"}, ...]}, computed from
+    the email's classification, its attachments' read_errors, this stage's
+    own outcome, and (for comparison_request emails) the extraction cache's
+    per-field confidence -- so a human review queue can be built by simply
+    filtering on escalation.required, without re-deriving any of this.
     """
     results: Dict[str, Dict[str, Any]] = {}
 
     for email in emails:
         classification = classifications.get(email.email_id)
-        if classification is None or classification.category != "comparison_request":
+        category = classification.category if classification else None
+
+        if category != "comparison_request":
+            results[email.email_id] = {
+                "status": "unclassified" if classification is None else "skipped",
+                "category": category,
+                "message": (
+                    "no classification available for this email"
+                    if classification is None
+                    else f"category '{category}' does not require SI/BL comparison"
+                ),
+            }
             continue
 
         try:
-            results[email.email_id] = await compare_si_vs_bl(
+            result = await compare_si_vs_bl(
                 email.attachments,
                 use_llm_fallback=use_llm_fallback,
                 confidence_threshold=confidence_threshold,
                 **extract_kwargs,
             )
+            result["category"] = category
+            results[email.email_id] = result
         except Exception as exc:  # one bad email must not halt the batch
-            results[email.email_id] = {"status": "error", "message": str(exc)}
+            results[email.email_id] = {"status": "error", "category": category, "message": str(exc)}
+
+    extraction_cache_path = extract_kwargs.get("cache_path", EXTRACTION_CACHE_PATH)
+    extraction_cache = load_extraction_cache(extraction_cache_path)
+    annotate_with_escalation(emails, classifications, results, extraction_cache)
 
     return results
 
@@ -157,11 +239,8 @@ async def run_pipeline(
 
     limit: process only the first N loaded emails -- for a quick sanity
     check against real LLM calls before running the whole inbox. None
-    (default) processes everything. Note the returned dict only contains
-    comparison_request-classified emails, so with a small limit it may
-    come back empty even when classification worked fine; inspect
-    classify_all's output directly if you need to see every email's
-    category, not just the comparison results.
+    (default) processes everything. The returned dict has one entry per
+    loaded email regardless of category (see process_comparison_requests).
 
     classify_kwargs / extract_kwargs are passed straight through to
     classify_all / extract_all respectively (e.g. concurrency, force,
@@ -183,7 +262,8 @@ async def run_pipeline(
 def summarize_comparisons(results: Dict[str, Dict[str, Any]]) -> str:
     """Human-readable report, in the same style as ingest.summarize()."""
     counts = Counter(r.get("status", "unknown") for r in results.values())
-    lines = [f"comparison_request emails processed: {len(results)}"]
+    needs_escalation = sum(1 for r in results.values() if r.get("escalation", {}).get("required"))
+    lines = [f"emails processed: {len(results)}", f"  needs escalation: {needs_escalation}"]
     lines += [f"  {status}: {n}" for status, n in sorted(counts.items())]
     for email_id, r in sorted(results.items()):
         if r.get("status") == "mismatch":
