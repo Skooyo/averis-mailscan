@@ -42,12 +42,15 @@ export type ClassificationDataset = Record<string, ClassifiedEmail>;
 export interface InboxEmail {
   docId: string; // the document's _id; `id` alone repeats across owners, so URLs use this
   id: string;
-  category: EmailCategory;
+  category: EmailCategory | null; // null while the email is still being classified
+  processing: boolean; // true while a Gmail sync is classifying it
   confidence: number | null; // null when the ingest overrode the classifier's category
-  from: string;
-  subject: string;
+  from: string | null; // null, like subject, when not stored: only shipping-document emails are kept in full
+  subject: string | null;
   sentAt: string | null; // ISO 8601; null when unknown (the demo dataset has no dates)
   attachmentCount: number;
+  /** Sender and subject aren't stored but can be read live from the viewer's own Gmail (see lib/live-headers). */
+  canLoadLive: boolean;
 }
 
 export interface AttachmentInfo {
@@ -62,13 +65,18 @@ export interface AttachmentInfo {
 export interface EmailDetail {
   docId: string;
   id: string;
-  category: EmailCategory;
+  category: EmailCategory | null; // null while the email is still being classified
+  processing: boolean;
   confidence: number | null;
-  from: string;
-  subject: string;
-  body: string;
+  from: string | null; // null when not stored (see InboxEmail)
+  subject: string | null;
+  body: string | null;
   sentAt: string | null;
   attachments: AttachmentInfo[];
+  /** True when from/subject/body were just read from the owner's Gmail because we don't store them. Nothing is saved. */
+  live: boolean;
+  /** Why the live read from Gmail failed, if it did. */
+  liveError: "reauth_required" | "not_found" | "failed" | null;
 }
 
 export interface EmailPresentation {

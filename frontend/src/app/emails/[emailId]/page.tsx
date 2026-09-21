@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, FileText, GitCompare } from "lucide-react";
-import { CategoryBadge } from "@/components/category-badge";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { CategoryBadge, ProcessingBadge } from "@/components/category-badge";
 import { ConfidenceBar } from "@/components/confidence-bar";
 import { getCurrentUserEmail } from "@/lib/auth";
 import { getEmailDetail } from "@/lib/emails";
@@ -20,6 +21,8 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
 
   return (
     <div className="space-y-6">
+      {/* While a sync is classifying this email, re-read it until the result is in. */}
+      <AutoRefresh active={email.processing} />
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-900"
@@ -33,7 +36,7 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight break-words text-slate-900">
-              {email.subject || "(no subject)"}
+              {email.subject === null ? "Subject not stored" : email.subject || "(no subject)"}
             </h1>
             <p className="mt-1 text-xs text-slate-500">{email.id}</p>
           </div>
@@ -51,7 +54,7 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
         <dl className="mt-6 grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">From</dt>
-            <dd className="mt-1 text-sm font-semibold break-all text-slate-900">{email.from || "—"}</dd>
+            <dd className="mt-1 text-sm font-semibold break-all text-slate-900">{email.from ?? "Not stored"}</dd>
           </div>
           <div>
             <dt className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">Sent</dt>
@@ -60,13 +63,15 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
           <div>
             <dt className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">Category</dt>
             <dd className="mt-1">
-              <CategoryBadge category={email.category} />
+              {email.category ? <CategoryBadge category={email.category} /> : <ProcessingBadge />}
             </dd>
           </div>
           <div>
             <dt className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">Confidence</dt>
             <dd className="mt-1">
-              {email.confidence === null ? (
+              {email.processing ? (
+                <span className="text-sm text-slate-400">Classifying…</span>
+              ) : email.confidence === null ? (
                 <span className="text-sm text-slate-400">— (category set at ingest, no classifier score)</span>
               ) : (
                 <ConfidenceBar value={email.confidence} />
@@ -78,11 +83,36 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
 
       {/* Body */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <h2 className="border-b border-slate-200 px-6 py-4 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
+        <h2 className="flex items-center justify-between gap-3 border-b border-slate-200 px-6 py-4 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
           Message
+          {email.live && (
+            <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold tracking-normal text-sky-700 normal-case">
+              Loaded live from Gmail, not stored
+            </span>
+          )}
         </h2>
+        {email.liveError && (
+          <p role="alert" className="mx-6 mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {email.liveError === "reauth_required" && (
+              <>
+                Couldn&apos;t load this email from Gmail because Google access has expired.{" "}
+                <a href="/api/auth/google?consent=1" className="font-semibold underline">
+                  Reconnect Google
+                </a>
+              </>
+            )}
+            {email.liveError === "not_found" && "This email is no longer in your Gmail (it may have been deleted)."}
+            {email.liveError === "failed" && "Couldn't load this email from Gmail right now. Try again in a moment."}
+          </p>
+        )}
         <pre className="px-6 py-5 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap text-slate-800">
-          {email.body || "(empty)"}
+          {email.body !== null
+            ? email.body || "(empty)"
+            : email.processing
+              ? "This email is still being classified. Only shipping-document emails (SI requests and comparison requests) are kept in full, so its message text will appear here if it turns out to be one."
+              : email.liveError
+                ? ""
+                : "The message text isn't stored: only shipping-document emails (SI requests and comparison requests) are kept in full."}
         </pre>
       </div>
 

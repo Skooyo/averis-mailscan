@@ -24,7 +24,12 @@ export async function saveGoogleUser(input: {
 
   const user = await User.findOneAndUpdate(
     { email: input.email.toLowerCase() },
-    { $set: update },
+    {
+      $set: update,
+      // A fresh token (first sign-in, or the user reconnecting) clears any earlier sync failure
+      // and the throttle, so the next inbox load syncs straight away.
+      ...(input.refreshToken && { $unset: { sync_error: 1, last_synced_at: 1 } }),
+    },
     { upsert: true, returnDocument: "after", runValidators: true },
   ).select("+google_refresh_token");
 

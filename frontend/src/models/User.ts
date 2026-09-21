@@ -18,6 +18,11 @@ const userSchema = new Schema(
     // .select("+google_refresh_token"), so it can't leak into a page by accident.
     google_refresh_token: { type: String, select: false },
     google_scope: String, // space-separated scopes the user actually granted
+    // Gmail sync bookkeeping (lib/gmail-sync).
+    last_synced_at: Date, // last attempt, successful or not; the sync runs at most once per interval
+    last_sync_ok_at: Date, // last attempt that succeeded: what the inbox shows as "Last synced"
+    sync_started_at: Date, // set while a sync runs, so two tabs can't sync at once
+    sync_error: String, // why the last attempt failed, e.g. "reauth_required"
   },
   { timestamps: true },
 );

@@ -1,4 +1,5 @@
 // src/components/category-badge.tsx
+import { Loader2 } from "lucide-react";
 import type { EmailCategory } from "@/types/averis";
 
 const categoryLabels: Record<EmailCategory, string> = {
@@ -21,6 +22,19 @@ export function CategoryBadge({ category }: { category: EmailCategory }) {
   return (
     <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold ${styles[category]}`}>
       {categoryLabels[category]}
+    </span>
+  );
+}
+
+/** Shown instead of a category while a Gmail sync is still classifying the email. */
+export function ProcessingBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700"
+      title="Being classified"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      Processing
     </span>
   );
 }

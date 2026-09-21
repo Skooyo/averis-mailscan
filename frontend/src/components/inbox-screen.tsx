@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Loader2,
   Mail,
   FilePlus,
   AlertTriangle,
@@ -17,11 +18,13 @@ import {
   FileText,
 } from "lucide-react";
 import { categoryLabels } from "@/data/averis-data";
-import { formatSent } from "@/lib/format";
+import { formatSent, timeAgo } from "@/lib/format";
+import { compareBySent } from "@/lib/sort";
 import type { EmailCategory, InboxEmail } from "@/types/averis";
 import { SelectMenu, type SelectOption } from "@/components/select-menu";
 import { StatCard } from "@/components/stat-card";
-import { CategoryBadge } from "@/components/category-badge";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { CategoryBadge, ProcessingBadge } from "@/components/category-badge";
 import { ConfidenceBar } from "@/components/confidence-bar";
 
 const categoryOptions: SelectOption<"all" | EmailCategory>[] = [
@@ -83,7 +86,84 @@ function pageWindow(page: number, count: number): (number | "…")[] {
 
 const csvCell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
 
-export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
+type SyncState =
+  | { phase: "idle" }
+  | { phase: "syncing" }
+  | { phase: "done"; added: number; unclassified: number }
+  | { phase: "busy" } // another tab is already syncing this account
+  | { phase: "recent" } // a manual refresh was skipped: Gmail was checked only moments ago
+  | { phase: "error"; error: string; message?: string };
+
+const RECONNECT = (
+  <a href="/api/auth/google?consent=1" className="font-semibold underline">
+    Reconnect Google
+  </a>
+);
+
+/** One line under the page title describing what the Gmail sync is doing / did. */
+function syncMessage(s: SyncState): React.ReactNode {
+  switch (s.phase) {
+    case "idle":
+      return null;
+    case "syncing":
+      return "Syncing your Gmail…";
+    case "busy":
+      return "Syncing your Gmail…";
+    case "recent":
+      return "Just checked Gmail a moment ago. Try again in a few seconds.";
+    case "done": {
+      const retry = s.unclassified > 0 ? ` ${s.unclassified} couldn't be classified and will be retried.` : "";
+      if (s.added > 0) return `Imported ${s.added} new email${s.added > 1 ? "s" : ""} from Gmail.${retry}`;
+      return s.unclassified > 0 ? retry.trim() : "Gmail is up to date.";
+    }
+    case "error":
+      switch (s.error) {
+        case "reauth_required":
+          return <>Google access has expired. {RECONNECT}</>;
+        case "no_gmail_access":
+          return <>Gmail access wasn&apos;t granted. {RECONNECT}</>;
+        case "classifier_not_configured":
+          return "Gmail sync is off: GROQ_API_KEY isn't set on the server.";
+        case "classifier_key_rejected":
+          return "Gmail sync failed: Groq rejected the server's API key.";
+        case "signed_out":
+          return "Sign in again to sync your Gmail.";
+        default:
+          return `Gmail sync failed${s.message ? `: ${s.message}` : "."}`;
+      }
+  }
+}
+
+/** "Last synced 21 Sep 2026, 14:19 UTC (3 min ago)": when Gmail was last checked successfully. */
+function LastSynced({ iso }: { iso: string | null }) {
+  // The relative part depends on the current time, so it's filled in after the page has loaded
+  // (rendering it on the server would not match the browser) and then kept fresh.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const first = setTimeout(() => setNow(Date.now()), 0);
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(tick);
+    };
+  }, []);
+
+  const absolute = formatSent(iso);
+  return (
+    <p data-testid="last-synced" className="mt-2 text-xs text-slate-500">
+      {absolute && iso ? (
+        <>
+          Last synced {absolute}
+          {now !== null && ` (${timeAgo(now - Date.parse(iso))})`}
+        </>
+      ) : (
+        "Not synced yet"
+      )}
+    </p>
+  );
+}
+
+export function InboxScreen({ emails, canSync, lastSyncedAt }: { emails: InboxEmail[]; canSync: boolean; lastSyncedAt: string | null }) {
   const router = useRouter();
 
   const [query, setQuery] = useState("");
@@ -95,6 +175,85 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(1);
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+
+  // Sender and subject we don't store are read live from the user's own Gmail, for the rows on
+  // the page being viewed. Held only here in the browser (and briefly in server memory); never saved.
+  const [liveHeaders, setLiveHeaders] = useState<Record<string, { from: string; subject: string } | "unavailable">>({});
+  const [liveNeedsReauth, setLiveNeedsReauth] = useState(false);
+  const liveRequested = useRef(new Set<string>()); // ids already asked for, so paging back doesn't ask again
+  const liveOf = (row: InboxEmail) => {
+    const v = liveHeaders[row.docId];
+    return v && v !== "unavailable" ? v : null;
+  };
+
+  // Signed-in users: pull new Gmail once the page has loaded, so the inbox itself is never
+  // held up by Gmail. The server throttles this (at most every 5 minutes per user) and only
+  // fetches mail it hasn't stored, so asking on every load is cheap.
+  const [sync, setSync] = useState<SyncState>(canSync ? { phase: "syncing" } : { phase: "idle" });
+  const hasProcessing = useMemo(() => emails.some((e) => e.processing), [emails]);
+  // While this tab's sync runs, or another tab's is still classifying rows we can see, re-read the
+  // list every few seconds so emails appear as "Processing" and then flip to their category.
+  const polling = sync.phase === "syncing" || (sync.phase === "busy" && hasProcessing);
+  // "Syncing in another tab" is over once no row is processing any more.
+  const shownSync: SyncState = sync.phase === "busy" && !hasProcessing ? { phase: "done", added: 0, unclassified: 0 } : sync;
+  const syncStarted = useRef(false); // React strict mode runs effects twice in development
+  // Asks the server to sync Gmail. `force` (the refresh button) skips the server's 5-minute wait.
+  // Callers set the "syncing" state first.
+  const runSync = useCallback(
+    (force: boolean) => {
+      // The server streams a "progress" line whenever the inbox changed (emails stored, a batch
+      // classified), so we refresh right then instead of waiting for the next poll.
+      const finish = (res: { status: string; reason?: string; error?: string; message?: string; added?: number; unclassified?: number }) => {
+          if (res.status === "error") {
+            setSync({ phase: "error", error: res.error ?? "failed", message: res.message });
+            return;
+          }
+          if (res.status === "skipped") {
+            // Recently synced, or another tab is mid-sync (then rows stay "Processing" until it finishes).
+            // A page-load sync skipped for being recent just means "nothing to do"; a manual refresh skipped
+            // for that reason should say so, rather than claim Gmail is up to date.
+            if (res.reason === "in_progress") setSync({ phase: "busy" });
+            else setSync(force ? { phase: "recent" } : { phase: "done", added: 0, unclassified: 0 });
+            return;
+          }
+          setSync({ phase: "done", added: res.added ?? 0, unclassified: res.unclassified ?? 0 });
+          router.refresh(); // final state: everything classified, retries removed
+      };
+
+      (async () => {
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force, stream: true }),
+        });
+        if (!res.ok || !res.body) return finish(await res.json().catch(() => ({ status: "error", error: "failed" })));
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newline: number;
+          while ((newline = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, newline);
+            buffer = buffer.slice(newline + 1);
+            if (!line) continue;
+            const message = JSON.parse(line);
+            if (message.type === "progress") router.refresh();
+            else if (message.type === "result") finish(message.result);
+          }
+        }
+      })().catch(() => setSync({ phase: "error", error: "failed" }));
+    },
+    [router],
+  );
+  useEffect(() => {
+    if (!canSync || syncStarted.current) return;
+    syncStarted.current = true;
+    runSync(false); // on page load: the server skips it if it synced within the last 5 minutes
+  }, [canSync, runSync]);
 
   const stats = useMemo(
     () => ({
@@ -109,27 +268,27 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
 
   const filteredRows = useMemo(() => {
     const q = query.toLowerCase();
-    // Emails without a confidence always sort last.
-    const conf = (e: InboxEmail) => e.confidence ?? (sortAsc ? Infinity : -Infinity);
+    const narrowed = categoryFilter !== "all" || confidenceFilter !== "all" || attachmentFilter !== "all";
     return emails
       .filter((row) => {
+        // Not classified yet, so it has no category, score or attachments to match those filters on.
+        if (row.processing && narrowed) return false;
         if (!showSpam && row.category === "spam") return false;
         if (categoryFilter !== "all" && row.category !== categoryFilter) return false;
         if (confidenceFilter !== "all" && confidenceBand(row.confidence) !== confidenceFilter) return false;
         if (attachmentFilter === "with" && row.attachmentCount === 0) return false;
         if (attachmentFilter === "without" && row.attachmentCount > 0) return false;
-        return `${row.from} ${row.subject} ${row.id}`.toLowerCase().includes(q);
+        const live = liveHeaders[row.docId];
+        const shown = live && live !== "unavailable" ? live : null;
+        return `${row.from ?? shown?.from ?? ""} ${row.subject ?? shown?.subject ?? ""} ${row.id}`.toLowerCase().includes(q);
       })
-      .sort((a, b) => {
-        const [x, y] = [conf(a), conf(b)];
-        return x === y ? 0 : sortAsc ? x - y : y - x; // avoids Infinity - Infinity = NaN
-      });
-  }, [emails, showSpam, categoryFilter, confidenceFilter, attachmentFilter, query, sortAsc]);
+      .sort((a, b) => compareBySent(a, b, !sortAsc)); // newest first unless toggled
+  }, [emails, showSpam, categoryFilter, confidenceFilter, attachmentFilter, query, sortAsc, liveHeaders]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const firstIndex = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = filteredRows.slice(firstIndex, firstIndex + PAGE_SIZE);
+  const pageRows = useMemo(() => filteredRows.slice(firstIndex, firstIndex + PAGE_SIZE), [filteredRows, firstIndex]);
   const activeFilters =
     (query ? 1 : 0) +
     (categoryFilter !== "all" ? 1 : 0) +
@@ -137,14 +296,35 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
     (attachmentFilter !== "all" ? 1 : 0) +
     (showSpam ? 1 : 0);
 
+  useEffect(() => {
+    const want = pageRows.filter((r) => r.canLoadLive && r.from === null && !liveRequested.current.has(r.docId)).map((r) => r.docId);
+    if (want.length === 0) return;
+    want.forEach((id) => liveRequested.current.add(id));
+    const failAll = () => setLiveHeaders((prev) => ({ ...prev, ...Object.fromEntries(want.map((id) => [id, "unavailable" as const])) }));
+    fetch("/api/inbox/headers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: want }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((res: { headers: Record<string, { from: string; subject: string }>; unavailable: string[]; reauthRequired: boolean }) => {
+        setLiveHeaders((prev) => ({ ...prev, ...res.headers, ...Object.fromEntries(res.unavailable.map((id) => [id, "unavailable" as const])) }));
+        if (res.reauthRequired) setLiveNeedsReauth(true);
+      })
+      .catch(failAll);
+  }, [pageRows]);
+
   // Re-reads the emails collection: refreshes the Server Component in place.
-  const handleRefresh = () => startRefresh(() => router.refresh());
+  const syncing = sync.phase === "syncing";
+  const handleRefresh = () => {
+    startRefresh(() => router.refresh()); // show whatever is already in the database straight away
+    if (canSync && !syncing) {
+      setSync({ phase: "syncing" });
+      runSync(true); // and check Gmail right now, without waiting out the 5 minutes
+    }
+  };
 
   const handleExport = () => {
     const csv = [
-      ["Email ID", "Category", "Confidence", "From", "Subject"].map(csvCell).join(","),
+      ["Email ID", "Category", "Confidence", "Sent", "From", "Subject"].map(csvCell).join(","),
       ...filteredRows.map((r) =>
-        [r.id, r.category, r.confidence === null ? "" : `${(r.confidence * 100).toFixed(1)}%`, r.from, r.subject]
+        [r.id, r.category ?? "processing", r.confidence === null ? "" : `${(r.confidence * 100).toFixed(1)}%`, r.sentAt ?? "", r.from ?? liveOf(r)?.from ?? "", r.subject ?? liveOf(r)?.subject ?? ""]
           .map(csvCell)
           .join(","),
       ),
@@ -166,6 +346,24 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
         <p className="mt-1 text-sm text-slate-500">
           Manage incoming shipping documents and verify them against digital instructions.
         </p>
+        {canSync && <LastSynced iso={lastSyncedAt} />}
+        {shownSync.phase !== "idle" && (
+          <p
+            role="status"
+            className={`mt-2 flex items-center gap-2 text-xs font-medium ${
+              shownSync.phase === "error" ? "text-amber-700" : "text-slate-500"
+            }`}
+          >
+            {(shownSync.phase === "syncing" || shownSync.phase === "busy") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {syncMessage(shownSync)}
+          </p>
+        )}
+        {liveNeedsReauth && (
+          <p role="status" className="mt-2 text-xs font-medium text-amber-700">
+            Some senders and subjects couldn&apos;t be loaded from Gmail because Google access has expired. {RECONNECT}
+          </p>
+        )}
+        <AutoRefresh active={polling} />
       </div>
 
       {/* Stat Cards */}
@@ -275,10 +473,11 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={isRefreshing}
-            aria-label="Refresh data"
+            disabled={isRefreshing || syncing}
+            aria-label={canSync ? "Refresh: check Gmail for new emails now" : "Refresh"}
+            title={canSync ? "Check Gmail now" : "Refresh"}
             className={`flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 ${
-              isRefreshing ? "animate-spin" : ""
+              isRefreshing || syncing ? "animate-spin" : ""
             }`}
           >
             <RefreshCw className="h-4 w-4" />
@@ -289,11 +488,12 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
               setSortAsc(!sortAsc);
               setPage(1);
             }}
-            aria-label="Sort by confidence score"
-            title="Sort by confidence"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            aria-label={`Sorted by date sent, ${sortAsc ? "oldest" : "newest"} first. Click to reverse.`}
+            title="Sort by date sent"
+            className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
             <ArrowUpDown className="h-4 w-4" />
+            {sortAsc ? "Oldest first" : "Newest first"}
           </button>
         </div>
 
@@ -333,6 +533,16 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
               )}
               {pageRows.map((row) => {
                 const isComparison = row.category === "comparison_request";
+                // Stored value, else what was just read live from Gmail; otherwise loading / unavailable / not stored.
+                const from = row.from ?? liveOf(row)?.from ?? null;
+                const subject = row.subject ?? liveOf(row)?.subject ?? null;
+                const loadingLive = row.canLoadLive && from === null && liveHeaders[row.docId] === undefined;
+                const unavailable = liveHeaders[row.docId] === "unavailable";
+                const placeholder = loadingLive ? (
+                  <span className="inline-block h-3 w-28 animate-pulse rounded bg-slate-200 align-middle" aria-label="Loading from Gmail" />
+                ) : (
+                  <span className="font-normal text-slate-400">{unavailable ? "Unavailable" : "Not stored"}</span>
+                );
 
                 return (
                   <tr
@@ -343,22 +553,25 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
                     <td className="px-6 py-4 font-semibold text-slate-900">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-700">
-                          {initials(row.from)}
+                          {from ? initials(from) : "—"}
                         </div>
-                        <span className="truncate max-w-[200px]" title={row.from}>
-                          {senderName(row.from)}
+                        <span className="truncate max-w-[200px]" title={from ?? undefined}>
+                          {from ? senderName(from) : placeholder}
                         </span>
                       </div>
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="max-w-md truncate font-semibold text-slate-900" title={row.subject}>
+                      <div className="max-w-md truncate font-semibold text-slate-900" title={subject ?? undefined}>
                         <Link
                           href={`/emails/${row.docId}`}
+                          // No prefetch: it would render every row's detail page up front (a live Gmail read for
+                          // each email we don't store) and re-do that on every refresh. It loads on click instead.
+                          prefetch={false}
                           onClick={(e) => e.stopPropagation()}
                           className="hover:underline"
                         >
-                          {row.subject || "(no subject)"}
+                          {subject === null ? placeholder : subject || "(no subject)"}
                         </Link>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
@@ -372,11 +585,13 @@ export function InboxScreen({ emails }: { emails: InboxEmail[] }) {
                     </td>
 
                     <td className="px-6 py-4">
-                      <CategoryBadge category={row.category} />
+                      {row.category ? <CategoryBadge category={row.category} /> : <ProcessingBadge />}
                     </td>
 
                     <td className="px-6 py-4">
-                      {row.confidence === null ? (
+                      {row.processing ? (
+                        <span className="text-xs text-slate-400">Classifying…</span>
+                      ) : row.confidence === null ? (
                         <span className="text-xs text-slate-400" title="Category set at ingest, no classifier score">
                           —
                         </span>
