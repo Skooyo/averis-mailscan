@@ -1,5 +1,8 @@
 # Averis Hackathon — Implementation Status & Next Steps
 
+_Last updated: 2026-09-21. Detailed module docs, setup and gotchas live in
+`HANDOVER.md` at the repo root; this file is the higher-level plan._
+
 ## Context
 The team's intended data flow is:
 
@@ -8,73 +11,118 @@ ingestion + classification -> extraction + db schema -> comparison json of SI an
   -> output pattern matching (case scenarios) => stream to FE
 ```
 
-This plan answers "how far along are we?" against that flow and proposes the
-next concrete steps. Everything below was verified by reading every non-data
-file in the repo (there are only two Python scripts).
-
-## Current state: what exists
-
-| File | What it does | Pipeline stage it serves |
-|---|---|---|
-| `GmailAPI.py` | OAuth2 login to Gmail, lists label names. Top-level script, no functions. Has a bug: checks `attachments/token.json` exists but then loads `token.json` from CWD (`GmailAPI.py:17-19`). | Proto for **ingestion** (live Gmail), but the hackathon dataset is local JSON — Gmail is not needed for the core flow. |
-| `OCRApi.py` | Google Document AI: sends one hard-coded PDF (`email_059_SI.pdf`) to a processor, prints entities. Top-level script, no functions. | Proto for **extraction** on scanned/PDF attachments (advanced stage only). |
-| `README.md` | One pip install line. | — |
-| `inbox/email_001..520.json` | 520 emails: `email_id, from, subject, body, attachments[]`. 126 have attachments. | Dataset (ingestion input) |
-| `attachments/` | 250 files: 192 txt, 28 pdf, 22 xlsx, 8 docx. Pairs `email_NNN_SI.*` + `email_NNN_BL.*`. | Dataset |
-| `clanker-food/*.md` | Problem statement, rubrics, rules. `CLAUDE.md` (untracked) is a good condensed brief. | Docs |
-
-**Missing from the hackathon bundle** (referenced in the problem statement but
-not in repo): `loader.py`, `sample_submission.json`, `docker-compose` for the
-self-eval server (`POST /submit`). These need to be copied in from the ZIP —
-`sample_submission.json` defines the output contract we must match.
+An extra **attachment → text conversion** step was inserted between ingestion
+and classification so that every downstream stage works on plain text
+regardless of the original file type (txt / pdf / xlsx / docx).
 
 ## Stage-by-stage status
 
-| Stage | Status | Notes |
+| Stage | Status | Where | Notes |
+|---|---|---|---|
+| 0. Skeleton | **done** | `requirements.txt`, `pyproject.toml`, `.gitignore` | `.gitignore` now covers `token.json`, `credentials.json`, `.env`, `output/`. `GmailAPI.py` / `OCRApi.py` still sit at repo root as side experiments — not wired in. |
+| 1a. Ingestion | **done** | `backend/ingest.py`, `backend/models.py` | Reads `inbox/*.json` (520 emails, 126 with attachments) into pydantic `Email` models and resolves attachment text from the converted-text store. |
+| 1b. Attachment → text | **done** | `backend/readers.py`, `backend/convert.py` | 250 attachments → `output/converted_text/`. 242 OK (192 txt, 22 xlsx, 20 pdf, 8 docx). 8 fail: 6 image-only PDFs (`pdf_no_text_layer`), 2 corrupt PDFs. Failures are recorded as `read_error`, never raised. |
+| 1c. Classification | **done** | `backend/classify.py`, `backend/llm.py`, `backend/cli.py` | Groq (`llama-3.3-70b-versatile`), strict JSON schema, 10 emails/call, retry/backoff for 429s + schema-validation 400s. 520/520 cached in `data/classifications.json`; 45/45 on the hand-labelled sample. Counts: general 151, comparison_request 129, new_si_request 125, invoice_query 75, spam 40. |
+| 2a. Extraction | **not started** | `backend/extract.py` (planned) | Design agreed — see below. |
+| 2b. DB schema | **not started** | — | Everything is pydantic + JSON files for now. Deferred until the pipeline is end-to-end. |
+| 3. Comparison JSON | **not started** | `backend/compare.py` (planned) | Design agreed — see below. |
+| 4. Escalation / case scenarios | **not started** | `backend/escalate.py` (planned) | |
+| 4b. Output JSON + self-eval | **not started** | `backend/submission.py` (planned) | `loader.py`, `sample_submission.json`, docker self-eval server **still need to be copied in** from the hackathon ZIP. |
+| 5. API + FE + deploy | **not started** | — | |
+
+Tests: `pytest tests/` → 28 tests (25 offline, 3 live Groq tests that skip
+without `GROQ_API_KEY`).
+
+**Overall: ~35% — the first three stages are done and exercised on the full
+dataset; nothing from extraction onward exists yet.**
+
+## Extraction + comparison design (agreed, not yet built)
+
+### The 7 canonical fields
+Both the SI and the BL are extracted into the **same** schema so that
+comparison is a like-for-like diff:
+
+| Canonical key | Type | Label variants seen / expected |
 |---|---|---|
-| 1. Ingestion | **0%** | No code reads `inbox/*.json` or resolves `attachments[]`. Gmail script is a side experiment, not wired to the dataset. |
-| 1. Classification | **0%** | No classifier (5 classes: comparison / new SI / invoice query / general / spam). No LLM client code at all. |
-| 2. Extraction | **~5%** | Only the Document AI smoke test for one PDF. Nothing for txt (77% of attachments), xlsx, docx. No 7-field schema (shipper, consignee, notify party, POL, POD, container count, gross weight). |
-| 2. DB schema | **0%** | No Postgres, no ORM, no models. |
-| 3. Comparison JSON | **0%** | No SI-vs-BL diff logic. |
-| 4. Output pattern matching / case scenarios | **0%** | No escalation logic (unreadable doc, missing field, low confidence). |
-| 5. Stream to FE | **0%** | No FastAPI backend, no frontend, no deploy. |
-| Infra | **0%** | No `requirements.txt`/`pyproject`, no `.env.example`, no Dockerfile, no deploy. `.gitignore` covers `apiDetails.env` and `.venv/` only — `token.json`/`credentials.json` are **not** ignored (risk of committing secrets). |
+| `shipper` | str | Shipper, Shipper/Exporter, Consignor |
+| `consignee` | str | Consignee, Consigned To |
+| `notify_party` | str | Notify Party, Notify, Notify Address |
+| `port_of_loading` | str | Port of Loading, POL, Load Port, Loading Port |
+| `port_of_discharge` | str | Port of Discharge, POD, Discharge Port, Destination Port |
+| `container_count` | int | Container Count, No. of Containers, "3 x 40HC" |
+| `gross_weight_kg` | float | Gross Weight, G.W., Cargo Weight (kg / t / MT / lbs) |
 
-**Overall: ~2% — prototypes of two external APIs, zero pipeline code.**
+Label normalisation happens **at extraction time**, not at comparison time:
+the LLM is told the canonical keys and the known variants and must map any
+equivalent label onto the canonical key. `compare.py` therefore only ever sees
+two identically-shaped objects and never touches raw labels. Do not assume the
+SI and BL use the same wording for a field — they deliberately don't.
 
-## Recommended next steps (in priority order)
+### `backend/extract.py`
+- One `llm.structured_completion` call per document (SI, then BL), strict
+  JSON schema keyed by the 7 canonical names.
+- Each field returns `{value | null, confidence, evidence}` where `evidence`
+  is the verbatim source line — used for the side-by-side report and for
+  human review.
+- `null` + reason when a field is genuinely absent; **never guess**.
+- Also returns `doc_type_detected` (`SI | BL | packing_list | other`) so that
+  emails 501–505 (packing list mislabelled as BL) are caught before comparison.
+- Cache results in `data/extractions.json` keyed by attachment path, same
+  pattern as classification, so re-runs are cheap under Groq's free-tier
+  limits.
+- Only runs for `comparison_request` emails (129) that have readable SI + BL
+  text; everything else is routed straight to escalation or skipped.
 
-Per the rubric, end-to-end functionality (25 pts) is the biggest lever, so
-build a thin vertical slice on txt attachments first, then widen.
+### `backend/compare.py` — pure Python, no LLM
+Value normalisation on top of label normalisation, because the same field is
+also *formatted* differently across the two docs:
+- **Strings** (parties, ports): casefold, collapse whitespace and punctuation,
+  strip company suffixes (`Ltd`, `Pte Ltd`, `Co.`, `Inc`) before equality.
+  Raw text is preserved for the report.
+- **`container_count`**: parse to int (`"3 x 40HC"` → 3).
+- **`gross_weight_kg`**: parse to float, convert units (`t` / `MT` → ×1000,
+  `lbs` → ×0.4536), compare with a small relative tolerance.
+- Output per field: `{field, si_value, bl_value, match: bool}`; report
+  mismatches as `SI: X / BL: Y`; `"No mismatch detected."` when all 7 match.
 
-### Step 0 — Project skeleton (½ day)
-- Copy `loader.py`, `sample_submission.json`, docker files from the hackathon ZIP into repo.
-- Create `backend/` package: `pyproject.toml` or `requirements.txt`, `.env.example`, add `token.json`, `credentials.json`, `.env` to `.gitignore`.
-- Move `GmailAPI.py` / `OCRApi.py` into `backend/experiments/` (keep, don't wire in yet).
+### `backend/escalate.py`
+Rules producing `status: ok | mismatch | needs_review` plus a human-readable
+`reason`, triggered by:
+- classification confidence < 0.7
+- `comparison_request` with a missing SI or BL attachment
+- any `read_error` on either attachment (covers the 8 failing PDFs)
+- `doc_type_detected` ≠ expected (501–505)
+- any field `null` or confidence below threshold on either side
 
-### Step 1 — Ingestion + classification
-- `backend/ingest.py`: iterate `inbox/*.json` (or via `loader.Inbox`), yield `Email` pydantic model, read attachment text for `.txt` via `inbox.read_text`.
-- `backend/classify.py`: single LLM call with structured JSON output → one of 5 categories + confidence. Use Claude Messages API with a tool/JSON schema (see `claude-api` skill before writing).
-- Store result in DB (Step 2 schema).
+Escalation is a required capability, not a fallback — it must produce useful
+context for a human, never a silent failure.
 
-### Step 2 — Extraction + DB schema
-- `backend/models.py` (SQLAlchemy/Postgres): tables `emails`, `classifications`, `extractions` (one row per doc: email_id, doc_type SI|BL, 7 fields, per-field confidence, raw_text), `comparisons`, `escalations`.
-- `backend/extract.py`: LLM structured extraction of 7 fields from document text, with `null` + reason when a field is missing. Start with txt; add `pdfplumber` / `openpyxl` / `python-docx` readers after the vertical slice works; keep Document AI (`OCRApi.py`) as fallback for scanned PDFs.
+## Next steps (in order)
 
-### Step 3 — Comparison JSON
-- `backend/compare.py`: pure Python, no LLM. Normalise (case, whitespace, unit for kg, numeric for containers) then diff field-by-field → `{field, si_value, bl_value, match: bool}`. Output "No mismatch detected." when all 7 match.
-
-### Step 4 — Output pattern matching (case scenarios)
-- `backend/escalate.py`: rules producing `status: ok | mismatch | needs_review` — e.g. missing SI or BL attachment, unreadable file type, extraction confidence < threshold, field null on either side. Always attach a human-readable `reason`.
-- `backend/submission.py`: fold everything into the `sample_submission.json` shape; run against `POST /submit` early and often.
-
-### Step 5 — Stream to FE
-- `backend/main.py` FastAPI: `POST /process` (runs pipeline), `GET /results`, `GET /results/{email_id}`, SSE endpoint `GET /stream` that emits per-email results as they finish.
-- `frontend/` Next.js: inbox table with category badges, per-email side-by-side SI/BL diff, escalation queue.
-- Deploy skeleton (Render/Cloud Run + Vercel) as soon as `main.py` returns a hello-world — rubric explicitly penalises last-minute deploys.
+1. **Copy in the self-eval bundle** (`loader.py`, `sample_submission.json`,
+   docker files) so the output contract is known before writing
+   `submission.py`.
+2. **`backend/extract.py`** per the design above; run on the 129
+   comparison-request emails; spot-check ~10 against the raw text.
+3. **`backend/compare.py`** + tests for the normalisation helpers.
+4. **`backend/escalate.py`** + tests for each rule.
+5. **`backend/submission.py`**: fold classification + comparison + escalation
+   into the `sample_submission.json` shape for **all 520 emails** (spam
+   included), `POST /submit`, record the score, iterate.
+6. **FastAPI + SSE + Next.js + deploy** — deploy a hello-world as soon as
+   `main.py` exists; the rubric penalises last-minute deploys.
+7. **Postgres** persistence of emails / attachments / classifications / results.
+8. **OCR fallback** for the 6 image-only PDFs (512–514) via Document AI
+   (`OCRApi.py` is the starting point).
 
 ## Verification
-- Step 1: `python -m backend.ingest` prints 520 emails, 126 with attachments; classify a 20-email sample and eyeball against subjects (e.g. `email_001` → comparison, `email_002` → invoice query).
-- Steps 2–4: run pipeline on the 96 txt-pair emails, build submission JSON, `POST /submit` to the local self-eval server and record the score; iterate.
-- Step 5: `curl` the SSE endpoint while `/process` runs; FE shows results appearing live; public URL loads.
+- Extraction: run on the 129 comparison requests; every doc yields 7 keys;
+  `null` rate per field logged; 501–505 flagged as `packing_list`.
+- Comparison: unit tests for each normaliser (case, suffixes, "3 x 40HC",
+  tonnes → kg); known-good pairs return "No mismatch detected.".
+- Escalation: the 8 unreadable PDFs and 501–505 all land in `needs_review`
+  with a reason.
+- Submission: `POST /submit` against the local self-eval server; score
+  recorded in `HANDOVER.md` after each run.
+- Stage 5: `curl` the SSE endpoint while `/process` runs; FE shows results
+  appearing live; public URL loads.
