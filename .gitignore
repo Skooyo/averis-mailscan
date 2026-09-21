@@ -2,3 +2,14 @@
 .venv/
 credentials.json
 token.json
+=======
+apiDetails.env
+.venv/
+token.json
+credentials.json
+.env
+__pycache__/
+.pytest_cache/
+output/
+.DS_Store
+>>>>>>> 60d7d37e21b89b88bee6f64c1b901485d0a5df0f
