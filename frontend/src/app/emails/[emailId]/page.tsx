@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, FileText, GitCompare } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { CategoryBadge, ProcessingBadge } from "@/components/category-badge";
+import { CategoryBadge, FailedBadge, ProcessingBadge } from "@/components/category-badge";
 import { ConfidenceBar } from "@/components/confidence-bar";
 import { getCurrentUserEmail } from "@/lib/auth";
 import { getEmailDetail } from "@/lib/emails";
@@ -63,7 +63,7 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
           <div>
             <dt className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">Category</dt>
             <dd className="mt-1">
-              {email.category ? <CategoryBadge category={email.category} /> : <ProcessingBadge />}
+              {email.category ? <CategoryBadge category={email.category} /> : email.failed ? <FailedBadge /> : <ProcessingBadge />}
             </dd>
           </div>
           <div>
@@ -108,7 +108,9 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
         <pre className="px-6 py-5 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap text-slate-800">
           {email.body !== null
             ? email.body || "(empty)"
-            : email.processing
+            : email.failed
+              ? "This email couldn't be classified yet, so it isn't stored in full. It will be retried on the next sync."
+              : email.processing
               ? "This email is still being classified. Only shipping-document emails (SI requests and comparison requests) are kept in full, so its message text will appear here if it turns out to be one."
               : email.liveError
                 ? ""

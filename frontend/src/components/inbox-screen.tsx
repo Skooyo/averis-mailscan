@@ -24,7 +24,7 @@ import type { EmailCategory, InboxEmail } from "@/types/averis";
 import { SelectMenu, type SelectOption } from "@/components/select-menu";
 import { StatCard } from "@/components/stat-card";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { CategoryBadge, ProcessingBadge } from "@/components/category-badge";
+import { CategoryBadge, FailedBadge, ProcessingBadge } from "@/components/category-badge";
 import { ConfidenceBar } from "@/components/confidence-bar";
 
 const categoryOptions: SelectOption<"all" | EmailCategory>[] = [
@@ -123,9 +123,9 @@ function syncMessage(s: SyncState): React.ReactNode {
         case "no_gmail_access":
           return <>Gmail access wasn&apos;t granted. {RECONNECT}</>;
         case "classifier_not_configured":
-          return "Gmail sync is off: GROQ_API_KEY isn't set on the server.";
+          return "Gmail sync is off: AI_GATEWAY_API_KEY isn't set on the server.";
         case "classifier_key_rejected":
-          return "Gmail sync failed: Groq rejected the server's API key.";
+          return "Gmail sync failed: the AI Gateway rejected the server's credentials (check the key and credit).";
         case "signed_out":
           return "Sign in again to sync your Gmail.";
         default:
@@ -193,7 +193,8 @@ export function InboxScreen({ emails, canSync, lastSyncedAt }: { emails: InboxEm
   const hasProcessing = useMemo(() => emails.some((e) => e.processing), [emails]);
   // While this tab's sync runs, or another tab's is still classifying rows we can see, re-read the
   // list every few seconds so emails appear as "Processing" and then flip to their category.
-  const polling = sync.phase === "syncing" || (sync.phase === "busy" && hasProcessing);
+  // (Whenever a row is processing, whichever tab or device started it. AutoRefresh gives up after 5 minutes.)
+  const polling = sync.phase === "syncing" || hasProcessing;
   // "Syncing in another tab" is over once no row is processing any more.
   const shownSync: SyncState = sync.phase === "busy" && !hasProcessing ? { phase: "done", added: 0, unclassified: 0 } : sync;
   const syncStarted = useRef(false); // React strict mode runs effects twice in development
@@ -272,7 +273,7 @@ export function InboxScreen({ emails, canSync, lastSyncedAt }: { emails: InboxEm
     return emails
       .filter((row) => {
         // Not classified yet, so it has no category, score or attachments to match those filters on.
-        if (row.processing && narrowed) return false;
+        if ((row.processing || row.failed) && narrowed) return false;
         if (!showSpam && row.category === "spam") return false;
         if (categoryFilter !== "all" && row.category !== categoryFilter) return false;
         if (confidenceFilter !== "all" && confidenceBand(row.confidence) !== confidenceFilter) return false;
@@ -585,7 +586,7 @@ export function InboxScreen({ emails, canSync, lastSyncedAt }: { emails: InboxEm
                     </td>
 
                     <td className="px-6 py-4">
-                      {row.category ? <CategoryBadge category={row.category} /> : <ProcessingBadge />}
+                      {row.category ? <CategoryBadge category={row.category} /> : row.failed ? <FailedBadge /> : <ProcessingBadge />}
                     </td>
 
                     <td className="px-6 py-4">

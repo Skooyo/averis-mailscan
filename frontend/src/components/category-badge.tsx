@@ -38,3 +38,15 @@ export function ProcessingBadge() {
     </span>
   );
 }
+
+/** Shown when classification didn't work for an email; the next sync tries again. */
+export function FailedBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-semibold text-red-700"
+      title="Classification failed. It will be retried on the next sync."
+    >
+      Not classified
+    </span>
+  );
+}

@@ -13,17 +13,18 @@ const emailSchema = new Schema(
   {
     owner: { type: String, required: true, lowercase: true, trim: true }, // User.email
     id: { type: String, required: true }, // unique per owner, not globally (e.g. "email_001" or a Gmail message id)
-    // Missing only while the email is still being classified (status "processing").
+    // Missing only while the email has no classification yet (status "processing" or "failed").
     category: {
       type: String,
       enum: EMAIL_CATEGORIES,
       required: function (this: { status?: string | null }) {
-        return this.status !== "processing";
+        return !this.status;
       },
     },
     // "processing" from the moment a Gmail sync stores the email until classification finishes;
-    // absent on every finished email. See lib/gmail-sync.
-    status: { type: String, enum: ["processing"] },
+    // "failed" if classification didn't work, in which case the next sync tries again. Absent on every
+    // finished email. See lib/gmail-sync.
+    status: { type: String, enum: ["processing", "failed"] },
     // Only set for SI/BL emails. `default: undefined` keeps the field absent
     // instead of Mongoose's default empty array.
     attachments: {

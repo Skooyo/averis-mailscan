@@ -1,8 +1,9 @@
 import "server-only";
 import { EMAIL_CATEGORIES } from "@/models/Email";
 
-// A TypeScript port of backend/classify.py + backend/llm.py, so the site can classify emails
-// pulled from Gmail without a second service. Keep the prompt in sync with the Python one.
+// A TypeScript port of backend/classify.py, so the site can classify emails pulled from Gmail
+// without a second service. The model is called through the Vercel AI Gateway. Keep the prompt in
+// sync with the Python one.
 
 export type Category = (typeof EMAIL_CATEGORIES)[number];
 
@@ -22,7 +23,7 @@ export interface ClassifyInput {
 }
 
 const BODY_LIMIT = 1200;
-const BATCH_SIZE = 10; // per call: Groq's free tier is token-limited, so the prompt is paid once per batch
+const BATCH_SIZE = 10; // emails per model call: the system prompt is paid once per batch, and a small batch keeps answers reliable
 
 export const SYSTEM_PROMPT = `You classify emails in a shipping-documentation team's inbox. Decide by what the sender is ASKING FOR in the BODY. Subject lines in this inbox are unreliable thread titles — never let them override the body. Missing, dropped or broken attachments do NOT change the category.
 
@@ -65,9 +66,21 @@ export function renderBatch(emails: ClassifyInput[]): string {
   return parts.join("\n\n");
 }
 
-// --- Groq -----------------------------------------------------------------------
+// --- Vercel AI Gateway --------------------------------------------------------
+// An OpenAI-compatible Chat Completions endpoint, so one key reaches many models:
+// https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions
 
-// Groq strict structured output: every object closed, every property required.
+const DEFAULT_MODEL = "alibaba/qwen3.8-omni-flash";
+
+// Not every model behind the gateway enforces the response schema, so also spell the shape out.
+// Kept out of SYSTEM_PROMPT so that stays identical to the Python pipeline's.
+const FORMAT_HINT =
+  '\n\nReply with only a JSON object of exactly this form, with one entry per email and no other text: {"results":[{"email_id":"...","category":"...","confidence":0.0,"reasoning":"..."}]}';
+const DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+
+// Structured output: every object closed, every property required. The 0-1 range of `confidence`
+// is left out of the schema because not every provider behind the gateway accepts range keywords;
+// parseItems() enforces it instead.
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
@@ -78,7 +91,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           email_id: { type: "string" },
           category: { type: "string", enum: [...EMAIL_CATEGORIES] },
-          confidence: { type: "number", minimum: 0, maximum: 1 },
+          confidence: { type: "number", description: "0 to 1" },
           reasoning: { type: "string" },
         },
         required: ["email_id", "category", "confidence", "reasoning"],
@@ -90,7 +103,25 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
 };
 
-export const classifierConfigured = () => Boolean(process.env.GROQ_API_KEY);
+/** The AI Gateway API key, or (when running with one) a Vercel OIDC token. */
+const gatewayToken = () => process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+
+export const classifierConfigured = () => Boolean(gatewayToken());
+
+/**
+ * How much the model reasons before answering (AI_GATEWAY_REASONING): "off", an effort ("none",
+ * "minimal", "low", "medium", "high"), or "default" to send nothing and use the model's own behaviour.
+ *
+ * Unset means "off" for the default model: measured on the 45 hand-labelled emails it was just as
+ * accurate (45/45) as with reasoning, and over twice as fast (33 s vs 78 s) and cheaper. For any other
+ * model nothing is sent unless asked for, since not every model accepts every reasoning setting.
+ */
+function reasoningParam(model: string): Record<string, unknown> {
+  const value = process.env.AI_GATEWAY_REASONING?.trim().toLowerCase();
+  if (value === "default") return {};
+  if (!value) return model === DEFAULT_MODEL ? { reasoning: { enabled: false } } : {};
+  return { reasoning: value === "off" ? { enabled: false } : { effort: value } };
+}
 
 export class ClassifierAuthError extends Error {}
 
@@ -100,7 +131,7 @@ export const RETRY_FALLBACK_MS = 15_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** How long to wait after a 429: Groq's retry-after header, else the "try again in Ns" text, else 15s. */
+/** How long to wait after a 429: the retry-after header, else a "try again in Ns" in the message, else 15s. */
 function retryDelayMs(res: Response | null, text: string): number {
   const header = Number(res?.headers.get("retry-after"));
   if (res?.headers.get("retry-after") && Number.isFinite(header)) return Math.min((header + 1) * 1000, MAX_WAIT_MS);
@@ -115,17 +146,38 @@ interface Item {
   reasoning: string;
 }
 
+/** Some providers wrap JSON in a Markdown code fence even when asked for plain JSON. */
+const unfence = (s: string) => s.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+
+/**
+ * The list of result objects inside the model's JSON answer. We ask for {"results": [...]}, but models
+ * behind the gateway don't always keep to the requested shape (this one often returns a bare array),
+ * so accept the reasonable variants: a bare array, one wrapper object holding an array, or a single result.
+ */
+function extractResults(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    if (Array.isArray(object.results)) return object.results;
+    const arrays = Object.values(object).filter(Array.isArray);
+    if (arrays.length === 1) return arrays[0];
+    if ("email_id" in object) return [object];
+  }
+  return null;
+}
+
 /** The valid result items in a chat-completion response, or null if it isn't the JSON we asked for. */
 function parseItems(text: string): Item[] | null {
   try {
     const content = JSON.parse(text)?.choices?.[0]?.message?.content;
-    const results = JSON.parse(content)?.results;
-    if (!Array.isArray(results)) return null;
+    const results = extractResults(JSON.parse(unfence(String(content)))) as Partial<Item>[] | null;
+    if (!results) return null;
     return results
       .filter(
         (r): r is Item =>
           typeof r?.email_id === "string" &&
-          (EMAIL_CATEGORIES as readonly string[]).includes(r?.category) &&
+          typeof r?.category === "string" &&
+          (EMAIL_CATEGORIES as readonly string[]).includes(r.category) &&
           typeof r?.confidence === "number" &&
           r.confidence >= 0 &&
           r.confidence <= 1,
@@ -137,18 +189,17 @@ function parseItems(text: string): Item[] | null {
 }
 
 async function complete(user: string): Promise<Item[]> {
-  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-  const url = `${process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1"}/chat/completions`;
+  const url = `${process.env.AI_GATEWAY_BASE_URL || DEFAULT_BASE_URL}/chat/completions`;
+  const model = process.env.AI_GATEWAY_MODEL || DEFAULT_MODEL;
   const body = JSON.stringify({
     model,
     temperature: 0,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: SYSTEM_PROMPT + FORMAT_HINT },
       { role: "user", content: user },
     ],
-    response_format: { type: "json_schema", json_schema: { name: "ClassificationBatch", strict: true, schema: RESPONSE_SCHEMA } },
-    // reasoning tokens count against the free-tier token limits
-    ...(model.includes("gpt-oss") && { reasoning_effort: "low" }),
+    response_format: { type: "json_schema", json_schema: { name: "ClassificationBatch", schema: RESPONSE_SCHEMA } },
+    ...reasoningParam(model),
   });
 
   let waits = 0;
@@ -159,7 +210,7 @@ async function complete(user: string): Promise<Item[]> {
     try {
       res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${gatewayToken()}` },
         body,
       });
       text = await res.text();
@@ -169,25 +220,21 @@ async function complete(user: string): Promise<Item[]> {
       continue;
     }
 
-    if (res.status === 401 || res.status === 403) throw new ClassifierAuthError(`Groq rejected the API key (${res.status})`);
+    // 401/403: bad or missing credentials. 402: the account has no credit left. None of these fix themselves.
+    if (res.status === 401 || res.status === 402 || res.status === 403) {
+      throw new ClassifierAuthError(`AI Gateway refused the request (${res.status}): check AI_GATEWAY_API_KEY and the account's credit`);
+    }
     if (res.status === 429 || res.status >= 500) {
-      if (++waits > MAX_WAITS) throw new Error(`Groq kept failing (${res.status})`);
+      if (++waits > MAX_WAITS) throw new Error(`AI Gateway kept failing (${res.status})`);
       await sleep(retryDelayMs(res, text));
       continue;
     }
-    if (!res.ok) {
-      // The model occasionally produces output Groq itself rejects; one retry usually fixes it.
-      if (res.status === 400 && text.includes("json_validate_failed") && !badOutput) {
-        badOutput = true;
-        continue;
-      }
-      throw new Error(`Groq ${res.status}: ${text.slice(0, 200)}`);
-    }
+    if (!res.ok) throw new Error(`AI Gateway ${res.status}: ${text.slice(0, 200)}`);
 
     const items = parseItems(text);
     if (items) return items;
-    if (badOutput) throw new Error("Groq returned unusable output twice");
-    badOutput = true;
+    if (badOutput) throw new Error("The model returned unusable output twice");
+    badOutput = true; // models occasionally produce malformed JSON; one retry usually fixes it
   }
 }
 
@@ -203,7 +250,7 @@ function pick(items: Item[], wanted: ClassifyInput[]): Map<string, Classificatio
 }
 
 /**
- * Classifies emails, 10 per Groq call. Emails the model skips get one individual retry.
+ * Classifies emails, 10 per model call. Emails the model skips get one individual retry.
  *
  * `onBatch` is called as each batch finishes, with its results and the ids that got none, so
  * the caller can show progress instead of waiting for everything. A batch that fails outright

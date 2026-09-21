@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { syncGmail } from "@/lib/gmail-sync";
 
 // The first sync fetches and classifies up to 50 emails, which can take a minute or two
-// (Groq's free tier rate-limits). Matters on serverless hosts; a normal server ignores it.
+// (model rate limits). Matters on serverless hosts; a normal server ignores it.
 export const maxDuration = 300;
 
 /**

@@ -17,7 +17,7 @@ import { Email } from "@/models/Email";
 import { User } from "@/models/User";
 
 export const SYNC_INTERVAL_MS = 5 * 60_000; // an automatic sync (page load) runs at most this often per user
-const FORCE_MIN_INTERVAL_MS = 10_000; // even a manual refresh can't sync more often than this (protects Gmail and Groq quota)
+const FORCE_MIN_INTERVAL_MS = 10_000; // even a manual refresh can't sync more often than this (protects the Gmail and model quotas)
 const STALE_LOCK_MS = 10 * 60_000; // a sync that started longer ago than this is assumed dead
 const MAX_MESSAGES = 50; // newest inbox messages considered per sync
 const FETCH_CONCURRENCY = 5;
@@ -177,19 +177,21 @@ async function pullAndStore(owner: string, client: OAuth2Client, onProgress?: ()
     })) as Parameters<typeof Email.bulkWrite>[0],
     { ordered: false },
   );
+  // Emails that failed to classify last time are back in the queue.
+  await Email.updateMany({ owner, id: { $in: messages.map((m) => m.id) }, status: "failed" }, { $set: { status: "processing" } });
   onProgress?.(); // the new emails are in the inbox now, as "Processing"
 
   let added = 0;
   let unclassified = 0;
   try {
-    // Each batch of 10 is finished as soon as Groq answers, so rows flip from "Processing" one batch at a time.
+    // Each batch of 10 is finished as soon as the model answers, so rows flip from "Processing" one batch at a time.
     await classifyEmails(
       messages.map((m) => ({ id: m.id, from: m.from, subject: m.subject, body: m.body, attachments: m.attachments })),
       async (results, failedIds) => {
         if (failedIds.length > 0) {
           unclassified += failedIds.length;
-          // Not stored: they're fetched and classified again on the next sync.
-          await Email.deleteMany({ owner, id: { $in: failedIds }, status: "processing" });
+          // Stay visible, marked "failed": the next sync fetches and classifies them again.
+          await Email.updateMany({ owner, id: { $in: failedIds }, status: "processing" }, { $set: { status: "failed" } });
         }
         for (const [id, c] of results) {
           if (await finalize(owner, client, byId.get(id)!, c)) added++;
@@ -199,7 +201,7 @@ async function pullAndStore(owner: string, client: OAuth2Client, onProgress?: ()
     );
   } finally {
     // Nothing from this sync may stay "processing" (a rejected API key, a crash mid-batch): it would never finish.
-    await Email.deleteMany({ owner, id: { $in: messages.map((m) => m.id) }, status: "processing" });
+    await Email.updateMany({ owner, id: { $in: messages.map((m) => m.id) }, status: "processing" }, { $set: { status: "failed" } });
   }
   return { added, checked: ids.length, unclassified };
 }
@@ -219,8 +221,9 @@ export async function syncGmail(
   if (!classifierConfigured()) return { status: "error", error: "classifier_not_configured" };
 
   // In development the server keeps the Email model it first loaded, so after a schema change it
-  // would silently drop the "processing" marker and leave emails stuck. Fail loudly instead.
-  if (!Email.schema.path("status")) {
+  // could silently mishandle the "processing" / "failed" markers. Fail loudly instead.
+  const statuses = (Email.schema.path("status") as { enumValues?: string[] } | undefined)?.enumValues;
+  if (!statuses?.includes("processing") || !statuses.includes("failed")) {
     return { status: "error", error: "failed", message: "The Email model is out of date - restart the dev server." };
   }
 

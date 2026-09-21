@@ -44,6 +44,7 @@ export interface InboxEmail {
   id: string;
   category: EmailCategory | null; // null while the email is still being classified
   processing: boolean; // true while a Gmail sync is classifying it
+  failed: boolean; // classification didn't work; the next sync retries it
   confidence: number | null; // null when the ingest overrode the classifier's category
   from: string | null; // null, like subject, when not stored: only shipping-document emails are kept in full
   subject: string | null;
@@ -67,6 +68,7 @@ export interface EmailDetail {
   id: string;
   category: EmailCategory | null; // null while the email is still being classified
   processing: boolean;
+  failed: boolean;
   confidence: number | null;
   from: string | null; // null when not stored (see InboxEmail)
   subject: string | null;
