@@ -3,7 +3,7 @@ import types
 
 import pytest
 
-from backend.compare import (
+from backend.comparison import (
     NO_MISMATCH_MESSAGE,
     compare_documents,
     compare_documents_with_fallback,
