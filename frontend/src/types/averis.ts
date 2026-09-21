@@ -38,6 +38,39 @@ export interface ClassifiedEmail {
 
 export type ClassificationDataset = Record<string, ClassifiedEmail>;
 
+/** An email row in the inbox, as read from the `emails` collection. */
+export interface InboxEmail {
+  docId: string; // the document's _id; `id` alone repeats across owners, so URLs use this
+  id: string;
+  category: EmailCategory;
+  confidence: number | null; // null when the ingest overrode the classifier's category
+  from: string;
+  subject: string;
+  sentAt: string | null; // ISO 8601; null when unknown (the demo dataset has no dates)
+  attachmentCount: number;
+}
+
+export interface AttachmentInfo {
+  id: string; // attachments _id, used for the download URL
+  filename: string;
+  docType: "SI" | "BL";
+  contentType: string;
+  size: number; // bytes
+}
+
+/** Everything about one email, for the detail page. */
+export interface EmailDetail {
+  docId: string;
+  id: string;
+  category: EmailCategory;
+  confidence: number | null;
+  from: string;
+  subject: string;
+  body: string;
+  sentAt: string | null;
+  attachments: AttachmentInfo[];
+}
+
 export interface EmailPresentation {
   sender: string;
   initials: string;

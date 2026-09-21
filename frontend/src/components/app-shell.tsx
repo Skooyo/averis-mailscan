@@ -69,9 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
             <span>Dashboard</span>
             <span>&gt;</span>
-            <Link href="/" className="hover:text-slate-900">Inbox</Link>
-            <span>&gt;</span>
-            <span className="font-semibold text-slate-900">Verify Documents</span>
+            <Link href="/" className="font-semibold text-slate-900">Inbox</Link>
           </div>
 
           <div className="flex items-center gap-4">

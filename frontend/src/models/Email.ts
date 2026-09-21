@@ -24,6 +24,7 @@ const emailSchema = new Schema(
     from: String,
     subject: String,
     confidence: Number, // classification confidence score
+    sent_at: Date, // when the email was sent (Gmail Date header); not in the demo dataset
   },
   // `id: false` stops Mongoose adding its own `id` virtual over our `id` field.
   { id: false, timestamps: true },
