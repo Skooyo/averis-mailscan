@@ -1,12 +1,13 @@
 import "server-only";
+import { getCurrentUser } from "@/lib/session";
+
+export { getCurrentUser };
 
 /**
- * The signed-in user's email, or null when nobody is signed in.
- *
- * There's no auth yet, so everyone is anonymous and only sees the shared
- * dataset. When OAuth lands, return the email from the verified session here;
- * the pages already pass this through to the queries.
+ * The signed-in user's email, or null for guests, who only see the shared
+ * sample data. Pages pass this to the queries in lib/emails.ts, which scope
+ * everything with `visibleOwners`.
  */
 export async function getCurrentUserEmail(): Promise<string | null> {
-  return null;
+  return (await getCurrentUser())?.email ?? null;
 }

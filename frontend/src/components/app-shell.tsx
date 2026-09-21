@@ -3,12 +3,22 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileSpreadsheet, Inbox, ShieldCheck, Search, Bell, ChevronDown } from "lucide-react";
+import { FileSpreadsheet, Inbox, ShieldCheck, Search, Bell } from "lucide-react";
+import type { CurrentUser } from "@/lib/session";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function initialsOf(user: CurrentUser) {
+  const words = (user.name || user.email.split("@")[0]).split(/[\s._-]+/).filter(Boolean);
+  const two = words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2);
+  return two.toUpperCase();
+}
+
+export function AppShell({ user, children }: { user: CurrentUser | null; children: React.ReactNode }) {
   const pathname = usePathname();
   const isInboxActive = pathname === "/" || pathname.startsWith("/comparison");
   const isReviewActive = pathname.startsWith("/review");
+
+  // The login page is full-screen, without the sidebar and header.
+  if (pathname === "/login") return <>{children}</>;
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900">
@@ -88,11 +98,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Bell className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                DR
-              </div>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+            <div className="flex items-center gap-3 border-l border-slate-200 pl-3">
+              {user ? (
+                <>
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700"
+                    title={user.email}
+                  >
+                    {initialsOf(user)}
+                  </div>
+                  <span className="hidden max-w-44 truncate text-xs font-semibold text-slate-700 lg:block">
+                    {user.name || user.email}
+                  </span>
+                  <form action="/api/auth/logout" method="post">
+                    <button
+                      type="submit"
+                      className="h-8 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         </header>
