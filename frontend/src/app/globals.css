@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --success: oklch(0.61 0.16 150);
+  --success-soft: oklch(0.96 0.06 145);
+  --warning: oklch(0.66 0.17 70);
+  --warning-soft: oklch(0.97 0.07 85);
+  --info: oklch(0.58 0.18 255);
+  --info-soft: oklch(0.95 0.04 255);
 }
 
 @theme inline {
@@ -10,7 +16,13 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  }
 
 @media (prefers-color-scheme: dark) {
   :root {
