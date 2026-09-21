@@ -1,14 +1,21 @@
 # TODO
 
-_Last updated: 2026-09-22 (third pass same day). Second pass implemented
-HANDOVER.md's plan items #1, #2, and #7 (every email in pipeline output,
-`backend/escalate.py`, OCR fallback). This pass closed out four remaining
-items: retry/correction workflows (`backend/review.py`), duplicate-
-attachment handling (`backend/pipeline.py::dedupe_attachments`), and two
-classification test gaps (offline regression tests + a review of
-classification beyond the 45-email labelled sample). See "Known issues
-(fixed)" at the bottom for what's newly done and what's still open within
-each._
+_Last updated: 2026-09-22 (fifth pass same day). Fourth pass implemented
+HANDOVER.md's plan item #5 (§9 below): `backend/db.py` (pymongo, opt-in
+`--write-db` on `backend/pipeline.py`) plus `frontend/src/models/Result.ts`
+and `frontend/src/lib/results.ts`, wiring `/comparison/[emailId]` and
+`/review` to real MongoDB `Result` docs instead of `data/averis-data.ts`'s
+mock. This is exactly what `clanker-food/claudes-plan.md` (the original
+architecture doc, written before the pipeline existed) called for under
+"Add a Python Mongo client (`backend/db.py` with pymongo, `MONGODB_URI`
+from `.env`) so the pipeline stages write to the same collections the
+frontend reads" — see "Known issues (fixed)" at the bottom for what's
+newly done and what's still open within each. This (fifth) pass live-
+verified the write path for the first time: `python -m backend.pipeline .
+5 --write-db` produced 5 real `Result` docs in Atlas, confirmed in Compass
+(§9). It also found the frontend read side can't actually be exercised
+yet — `frontend/.env` doesn't exist, only `.env.example` — so the read
+path is code-complete but still visually unconfirmed._
 
 ## 🔴 Blocking — do these two first
 
@@ -344,20 +351,86 @@ each._
 
 ## 9. Frontend and API
 
-- [ ] Add backend/API endpoints
-- [ ] Connect the frontend to real backend or MongoDB data
-- [ ] Replace mock fields with the seven canonical fields
-- [ ] Display:
-  - [ ] Email ID
-  - [ ] Category
-  - [ ] Match/mismatch status
-  - [ ] SI value
-  - [ ] BL value
-  - [ ] Escalation reason
-- [ ] Add retry and human-review actions
+- [x] Add a backend->MongoDB write path — `backend/db.py` (pymongo,
+      `MONGODB_URI`/`MONGODB_DB` env vars, same names as
+      `frontend/.env.example`), `upsert_results(owner, results)` keyed on
+      `(owner, email_id)`, wired opt-in via `--write-db` on
+      `backend/pipeline.py`'s `main()`. 14 mocked tests
+      (`tests/test_db.py`) + 1 live test gated on **both** `MONGODB_URI`
+      **and** `RUN_LIVE_DB_TESTS=1` -- NOT on `MONGODB_URI` alone like
+      `test_classify.py`'s `AI_GATEWAY_API_KEY`-gated tests, because this
+      machine's `.env` has a real `MONGODB_URI` for the app to run at all;
+      gating on that alone meant a plain `pytest tests/` silently wrote to
+      and deleted from the real Atlas cluster every run (caught by review,
+      fixed same session -- see HANDOVER.md's "Known issues").
+      No REST/API endpoints were added — the pipeline writes directly to
+      Mongo, the frontend reads directly from Mongo via Mongoose; there is
+      no HTTP boundary between them by design (see HANDOVER.md's
+      "MongoDB is the integration boundary").
+      **Live-verified 2026-09-22 (fifth pass):** ran
+      `python -m backend.pipeline . 5 --write-db` against real emails
+      (`email_001`-`005`), confirmed 5 documents landed in Atlas's
+      `jobhunters.results` collection via MongoDB Compass (owner=`shared`,
+      correct `email_id`/`status`/`escalation` shape). This was a real
+      pipeline run, not the synthetic `test_live_upsert_results_roundtrip`
+      doc — first actual proof the write path works end-to-end against
+      production-shaped data. Still open: the full 520-email run (§4/§9
+      below), and confirming the frontend actually renders these 5 docs
+      (see the `frontend/.env` gap noted just below — that was still
+      missing as of this check, so the read side hasn't been visually
+      confirmed yet even though the data is there to read).
+- [x] Connect the frontend to real MongoDB data — `frontend/src/models/
+      Result.ts` (schema) + `frontend/src/lib/results.ts`
+      (`getComparisonResult`, `getReviewQueue`). `/comparison/[emailId]`
+      and `/review` now read these instead of `data/averis-data.ts`'s
+      mock; `data/averis-data.ts` itself is untouched and still in the
+      repo (its `categoryLabels` export is still used by
+      `inbox-screen.tsx`).
+- [ ] **`frontend/.env` doesn't exist yet (only `frontend/.env.example`),
+      found 2026-09-22.** Without it `npm run dev` has no `MONGODB_URI`, so
+      `/review`/`/comparison/[emailId]` can't read anything back even
+      though real `Result` docs now exist in Atlas (see the live-write
+      note above). Fix: `cd frontend && cp .env.example .env`, paste in
+      the same `MONGODB_URI` as the root `.env`. Not yet done as of this
+      pass — the read side is code-complete but still visually
+      unconfirmed against real data.
+- [x] Replace mock fields with the seven canonical fields —
+      `ComparisonFieldResult`/`CANONICAL_FIELDS` in
+      `frontend/src/types/averis.ts` / `frontend/src/lib/results.ts` use
+      `shipper`/`consignee`/`notify_party`/`port_of_loading`/
+      `port_of_discharge`/`container_count`/`gross_weight_kg` — not the
+      mock's `bl_number`/`vessel_name`/`tax_id`/etc, which don't exist in
+      the real backend output.
+- [x] Display:
+  - [x] Email ID
+  - [x] Category
+  - [x] Match/mismatch status
+  - [x] SI value — **only for a mismatched/missing field**; see the
+        `CompareResult` gap noted in HANDOVER.md's design decisions —
+        `backend/comparison.py` never persists a *matched* field's value,
+        so the comparison table honestly shows "matched" with no value
+        rather than fabricating one for those rows.
+  - [x] BL value — same caveat as SI value above.
+  - [x] Escalation reason — full `reasons[]` array (code + detail), not
+        just one, on both `/review` and `/comparison/[emailId]`.
+- [ ] Add retry and human-review actions — **still not built**, same
+      reasoning as §6's "still open" note: `backend/review.py`'s
+      `retry_email`/`record_correction`/`apply_corrections`/
+      `mark_resolved` are library-level only, callable from Python, not
+      exposed as a mutation the frontend can trigger. The `Result` schema
+      was designed to represent a corrected/resolved state
+      (`corrections[]`, `escalation.resolved`/`resolved_by`/
+      `resolution_note`) so adding that surface later doesn't need a
+      schema change, but no write API or UI action was built this pass —
+      explicitly out of scope per this session's brief.
 
-_Not started — correctly deferred; no point building UI around a pipeline
-still missing escalation and full-dataset coverage._
+_Read side code-complete and now live-verified on the write side: 5 real
+`Result` docs exist in Atlas (`email_001`-`005`, owner=`shared`) from a
+real `--write-db` pipeline run, confirmed in Compass. Not yet confirmed:
+that the frontend actually renders them — blocked on the missing
+`frontend/.env` noted above, and on the full 520-email run still being
+outstanding (§4). Write/mutation side (retry, correct, resolve from the
+UI) is still not built — deliberately deferred, see above._
 
 ## 10. Advanced document support
 
@@ -425,7 +498,9 @@ code: this machine has no GCP Application Default Credentials, so
        `comparison_request`) in its output, plus the escalate step~~
        (§1, §7) — done
 8. [ ] Generate and evaluate submissions (§8, once #2 is answered)
-9. [ ] Connect the frontend (§9)
+9. [x] ~~Connect the frontend (§9)~~ — read side done (`backend/db.py`,
+       `frontend/src/models/Result.ts`, `frontend/src/lib/results.ts`);
+       retry/correction UI still not built, see §9
 10. [x] ~~Add OCR for scanned documents~~ (§10) — wired and tested (mocked);
        live end-to-end use blocked on GCP Application Default Credentials
        not being set up on this machine, see §10 above

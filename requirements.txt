@@ -4,6 +4,7 @@ pdfplumber>=0.11
 openpyxl>=3.1
 python-docx>=1.1
 httpx>=0.28
+pymongo>=4.6  # backend/db.py -- writes pipeline results into the same Atlas cluster the frontend reads
 
 # Existing API experiments (GmailAPI.py, OCRApi.py)
 google-auth-oauthlib

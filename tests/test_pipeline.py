@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -605,3 +606,45 @@ def test_main_without_any_args_defaults_data_dir_too(monkeypatch):
 
     assert captured["limit"] is None
     assert captured["data_dir"].name != ""  # resolved to repo root, not empty
+
+
+def test_main_without_write_db_flag_never_calls_upsert_results(monkeypatch, tmp_path):
+    async def fake_run_pipeline(data_dir, text_store=None, limit=None, **kwargs):
+        return {"email_001": {"status": "match"}}
+
+    monkeypatch.setattr("backend.pipeline.run_pipeline", fake_run_pipeline)
+    fake_upsert = MagicMock()
+    monkeypatch.setattr("backend.db.upsert_results", fake_upsert)
+
+    main(["prog", str(tmp_path)])
+
+    fake_upsert.assert_not_called()
+
+
+def test_main_with_write_db_flag_upserts_the_run_results(monkeypatch, tmp_path, capsys):
+    results = {"email_001": {"status": "match"}}
+
+    async def fake_run_pipeline(data_dir, text_store=None, limit=None, **kwargs):
+        return results
+
+    monkeypatch.setattr("backend.pipeline.run_pipeline", fake_run_pipeline)
+    fake_upsert = MagicMock(return_value=1)
+    monkeypatch.setattr("backend.db.upsert_results", fake_upsert)
+
+    main(["prog", str(tmp_path), "--write-db"])
+
+    fake_upsert.assert_called_once_with("shared", results)
+    assert "wrote 1 result(s) to MongoDB" in capsys.readouterr().out
+
+
+def test_main_with_write_db_and_owner_flags_passes_owner_through(monkeypatch, tmp_path):
+    async def fake_run_pipeline(data_dir, text_store=None, limit=None, **kwargs):
+        return {}
+
+    monkeypatch.setattr("backend.pipeline.run_pipeline", fake_run_pipeline)
+    fake_upsert = MagicMock(return_value=0)
+    monkeypatch.setattr("backend.db.upsert_results", fake_upsert)
+
+    main(["prog", str(tmp_path), "--write-db", "--owner", "someone@example.com"])
+
+    fake_upsert.assert_called_once_with("someone@example.com", {})

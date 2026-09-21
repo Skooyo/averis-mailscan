@@ -99,3 +99,85 @@ export interface ReviewQueueItem {
   priority: "high" | "medium" | "low";
   requiresReview: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Real pipeline output (frontend/src/models/Result.ts, backend/pipeline.py
+// process_comparison_requests()), read via frontend/src/lib/results.ts.
+// Kept separate from the mock types above (still used by
+// frontend/src/data/averis-data.ts) rather than reshaping them, since the
+// real backend shape doesn't line up field-for-field with the mock's.
+// ---------------------------------------------------------------------------
+
+/** The literal status strings backend/pipeline.py/backend/comparison.py emit. */
+export type ResultStatus = "match" | "mismatch" | "error" | "skipped" | "unclassified";
+
+/** backend/escalate.py `EscalationReason`. */
+export interface EscalationReasonInfo {
+  code: string;
+  detail: string;
+}
+
+/** backend/escalate.py `EscalationReport`. */
+export interface EscalationInfo {
+  required: boolean;
+  reasons: EscalationReasonInfo[];
+  resolved: boolean;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+}
+
+/**
+ * One of the 7 canonical fields (backend/comparison.py `FIELDS`), for a
+ * match/mismatch result. backend/comparison.py's CompareResult only ever
+ * records SI/BL *values* for a field it flagged as mismatched or missing --
+ * a matched field is known only to have matched, its value isn't persisted
+ * anywhere -- so `siValue`/`blValue` are null whenever `match` is true.
+ */
+export interface ComparisonFieldResult {
+  field: string;
+  match: boolean;
+  siValue: string | number | null;
+  blValue: string | number | null;
+}
+
+/** backend/review.py `Correction`, as recorded in a result's audit trail. */
+export interface CorrectionInfo {
+  field: string; // "category", or a canonical field name
+  value: unknown;
+  note: string | null;
+  correctedBy: string | null;
+  correctedAt: string;
+}
+
+/** One collapsed duplicate-attachment group (backend/pipeline.py::dedupe_attachments()). */
+export interface DuplicateAttachmentGroup {
+  kept: string;
+  dropped: string[];
+}
+
+/** One email's Result document, mapped to a plain serializable shape. */
+export interface ResultView {
+  emailId: string;
+  status: ResultStatus;
+  category: EmailCategory | null; // null only for "unclassified"
+  message: string;
+  // [] for error/skipped/unclassified, which never ran a comparison.
+  fields: ComparisonFieldResult[];
+  duplicateAttachments: DuplicateAttachmentGroup[];
+  corrections: CorrectionInfo[];
+  retried: boolean;
+  escalation: EscalationInfo;
+  processedAt: string; // ISO 8601
+}
+
+/** One row of the review queue: an escalated email, joined with its Email for display. */
+export interface EscalationQueueItem {
+  emailId: string;
+  category: EmailCategory | null;
+  status: ResultStatus;
+  subject: string | null;
+  from: string | null;
+  reasons: EscalationReasonInfo[];
+  resolved: boolean;
+  processedAt: string; // ISO 8601
+}

@@ -1,0 +1,230 @@
+{
+  "attachments/email_001_BL.txt": {
+    "doc_type_detected": "BL",
+    "shipper": {
+      "value": "APRIL FAR EAST (M) SDN BHD",
+      "confidence": 1.0,
+      "evidence": "SHIPPER: APRIL FAR EAST (M) SDN BHD"
+    },
+    "consignee": {
+      "value": "MOORIM SP CO., LTD",
+      "confidence": 1.0,
+      "evidence": "CONSIGNEE: MOORIM SP CO., LTD"
+    },
+    "notify_party": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "Notify: UAB NOVAKOPA"
+    },
+    "port_of_loading": {
+      "value": "PORT KLANG (WESTPORT), MALAYSIA (MYPKG)",
+      "confidence": 1.0,
+      "evidence": "Port of Loading (POL): PORT KLANG (WESTPORT), MALAYSIA (MYPKG)"
+    },
+    "port_of_discharge": {
+      "value": "CALLAO, PERU (PECLL)",
+      "confidence": 1.0,
+      "evidence": "POD: CALLAO, PERU (PECLL)"
+    },
+    "container_count": {
+      "value": "1",
+      "confidence": 1.0,
+      "evidence": "Container Count: 1 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "21577",
+      "confidence": 1.0,
+      "evidence": "Gross Wt (kgs): 21,577 KG"
+    }
+  },
+  "attachments/email_001_SI.txt": {
+    "doc_type_detected": "SI",
+    "shipper": {
+      "value": "APRIL FAR EAST (M) SDN BHD",
+      "confidence": 1.0,
+      "evidence": "Shipper/Exporter: APRIL FAR EAST (M) SDN BHD"
+    },
+    "consignee": {
+      "value": "MOORIM SP CO., LTD",
+      "confidence": 1.0,
+      "evidence": "CONSIGNEE: MOORIM SP CO., LTD"
+    },
+    "notify_party": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "NOTIFY PARTY: UAB NOVAKOPA"
+    },
+    "port_of_loading": {
+      "value": "PORT KLANG (WESTPORT), MALAYSIA (MYPKG)",
+      "confidence": 1.0,
+      "evidence": "Port of Loading: PORT KLANG (WESTPORT), MALAYSIA (MYPKG)"
+    },
+    "port_of_discharge": {
+      "value": "CALLAO, PERU (PECLL)",
+      "confidence": 1.0,
+      "evidence": "Discharge Port: CALLAO, PERU (PECLL)"
+    },
+    "container_count": {
+      "value": "1",
+      "confidence": 1.0,
+      "evidence": "No. of Containers or Packages: 1 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "21577",
+      "confidence": 1.0,
+      "evidence": "Gross Weight (KG): 21,577 KG"
+    }
+  },
+  "attachments/email_004_BL.txt": {
+    "doc_type_detected": "BL",
+    "shipper": {
+      "value": "APRIL FAR EAST (M) SDN BHD",
+      "confidence": 1.0,
+      "evidence": "SHIPPER: APRIL FAR EAST (M) SDN BHD"
+    },
+    "consignee": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "To the Order of: UAB NOVAKOPA"
+    },
+    "notify_party": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "Notify Party: UAB NOVAKOPA"
+    },
+    "port_of_loading": {
+      "value": "NANTONG, CHINA (CNNTG)",
+      "confidence": 1.0,
+      "evidence": "Port of Loading (POL): NANTONG, CHINA (CNNTG)"
+    },
+    "port_of_discharge": {
+      "value": "KARACHI, PAKISTAN (PKKHI)",
+      "confidence": 1.0,
+      "evidence": "POD: KARACHI, PAKISTAN (PKKHI)"
+    },
+    "container_count": {
+      "value": "6",
+      "confidence": 1.0,
+      "evidence": "Container Count: 6 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "131058",
+      "confidence": 1.0,
+      "evidence": "Gross Weight (KG): 131,058 KG"
+    }
+  },
+  "attachments/email_004_SI.txt": {
+    "doc_type_detected": "SI",
+    "shipper": {
+      "value": "APRIL FAR EAST (M) SDN BHD",
+      "confidence": 1.0,
+      "evidence": "Shipper: APRIL FAR EAST (M) SDN BHD"
+    },
+    "consignee": {
+      "value": "EAST BRIGHT FZ-LLC",
+      "confidence": 1.0,
+      "evidence": "Consignee (Non-Negotiable): EAST BRIGHT FZ-LLC"
+    },
+    "notify_party": {
+      "value": "EAST BRIGHT FZ-LLC",
+      "confidence": 1.0,
+      "evidence": "Notify: EAST BRIGHT FZ-LLC"
+    },
+    "port_of_loading": {
+      "value": "NANTONG, CHINA (CNNTG)",
+      "confidence": 1.0,
+      "evidence": "Port of Loading (POL): NANTONG, CHINA (CNNTG)"
+    },
+    "port_of_discharge": {
+      "value": "KARACHI, PAKISTAN (PKKHI)",
+      "confidence": 1.0,
+      "evidence": "POD: KARACHI, PAKISTAN (PKKHI)"
+    },
+    "container_count": {
+      "value": "6",
+      "confidence": 1.0,
+      "evidence": "Total Containers: 6 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "131058",
+      "confidence": 1.0,
+      "evidence": "Gross Wt (kgs): 131,058 KG"
+    }
+  },
+  "attachments/email_005_BL.xlsx": {
+    "doc_type_detected": "BL",
+    "shipper": {
+      "value": "ASIA PACIFIC PAPERBOARD TRADING PTE LTD",
+      "confidence": 1.0,
+      "evidence": "Shipper (Principal or Seller) | ASIA PACIFIC PAPERBOARD TRADING PTE LTD | 80 RAFFLES PLACE, #50-01 UOB PLAZA 1; SINGAPORE 048624"
+    },
+    "consignee": {
+      "value": "BALL & DOGGETT AUSTRALIA PTY LTD",
+      "confidence": 1.0,
+      "evidence": "CONSIGNEE | BALL & DOGGETT AUSTRALIA PTY LTD | 43-45 METROPOLITAN ROAD; ENFIELD NSW 2136, AUSTRALIA"
+    },
+    "notify_party": {
+      "value": "BALL & DOGGETT AUSTRALIA PTY LTD",
+      "confidence": 1.0,
+      "evidence": "NOTIFY PARTY | BALL & DOGGETT AUSTRALIA PTY LTD | 43-45 METROPOLITAN ROAD; ENFIELD NSW 2136, AUSTRALIA"
+    },
+    "port_of_loading": {
+      "value": "SINGAPORE",
+      "confidence": 1.0,
+      "evidence": "Load Port | SINGAPORE"
+    },
+    "port_of_discharge": {
+      "value": "KOPER, SLOVENIA",
+      "confidence": 1.0,
+      "evidence": "POD | KOPER, SLOVENIA"
+    },
+    "container_count": {
+      "value": "15",
+      "confidence": 1.0,
+      "evidence": "No. of Containers or Packages | 15 x 20'GP"
+    },
+    "gross_weight_kg": {
+      "value": "341715",
+      "confidence": 1.0,
+      "evidence": "Gross Weight (KG) | 341715"
+    }
+  },
+  "attachments/email_005_SI.xlsx": {
+    "doc_type_detected": "SI",
+    "shipper": {
+      "value": "ASIA PACIFIC PAPERBOARD TRADING PTE LTD",
+      "confidence": 1.0,
+      "evidence": "SHIPPER | ASIA PACIFIC PAPERBOARD TRADING PTE LTD | 80 RAFFLES PLACE, #50-01 UOB PLAZA 1; SINGAPORE 048624"
+    },
+    "consignee": {
+      "value": "BALL & DOGGETT AUSTRALIA PTY LTD",
+      "confidence": 1.0,
+      "evidence": "Consignee (Non-Negotiable) | BALL & DOGGETT AUSTRALIA PTY LTD | 43-45 METROPOLITAN ROAD; ENFIELD NSW 2136, AUSTRALIA"
+    },
+    "notify_party": {
+      "value": "BALL & DOGGETT AUSTRALIA PTY LTD",
+      "confidence": 1.0,
+      "evidence": "NOTIFY PARTY | BALL & DOGGETT AUSTRALIA PTY LTD | 43-45 METROPOLITAN ROAD; ENFIELD NSW 2136, AUSTRALIA"
+    },
+    "port_of_loading": {
+      "value": "SINGAPORE",
+      "confidence": 1.0,
+      "evidence": "Port of Loading (POL) | SINGAPORE"
+    },
+    "port_of_discharge": {
+      "value": "KOPER, SLOVENIA",
+      "confidence": 1.0,
+      "evidence": "Port of Discharge | KOPER, SLOVENIA"
+    },
+    "container_count": {
+      "value": "15",
+      "confidence": 1.0,
+      "evidence": "No. of Containers or Packages | 15 x 20'GP"
+    },
+    "gross_weight_kg": {
+      "value": "341715",
+      "confidence": 1.0,
+      "evidence": "GROSS WEIGHT | 341715"
+    }
+  }
+}

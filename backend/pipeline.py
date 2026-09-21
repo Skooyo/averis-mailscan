@@ -14,6 +14,7 @@ each to plain values, and hand them to the deterministic comparator.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import sys
@@ -274,14 +275,44 @@ def summarize_comparisons(results: Dict[str, Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+DEFAULT_RESULT_OWNER = "shared"  # matches SHARED_OWNER in frontend/src/lib/constants.ts
+
+
 def main(argv: List[str]) -> None:
-    data_dir = Path(argv[1]) if len(argv) > 1 else Path(__file__).resolve().parent.parent
-    limit = int(argv[2]) if len(argv) > 2 else None
+    """`python -m backend.pipeline [data_dir] [limit] [--write-db] [--owner OWNER]`
+
+    data_dir/limit stay positional (unchanged from before --write-db existed,
+    so existing callers/tests keep working). --write-db is opt-in: without
+    it this behaves exactly as before, no MongoDB connection is ever
+    attempted.
+    """
+    parser = argparse.ArgumentParser(prog="python -m backend.pipeline")
+    parser.add_argument("data_dir", nargs="?", default=None)
+    parser.add_argument("limit", nargs="?", type=int, default=None)
+    parser.add_argument(
+        "--write-db",
+        action="store_true",
+        help="upsert results into MongoDB after the run (needs MONGODB_URI; see .env.example)",
+    )
+    parser.add_argument(
+        "--owner",
+        default=DEFAULT_RESULT_OWNER,
+        help=f"Result.owner to write under (default: {DEFAULT_RESULT_OWNER!r}, the shared demo dataset)",
+    )
+    args = parser.parse_args(argv[1:])
+
+    data_dir = Path(args.data_dir) if args.data_dir else Path(__file__).resolve().parent.parent
     text_store = data_dir / "output" / "converted_text"
     results = asyncio.run(
-        run_pipeline(data_dir, text_store if text_store.is_dir() else None, limit=limit)
+        run_pipeline(data_dir, text_store if text_store.is_dir() else None, limit=args.limit)
     )
     print(summarize_comparisons(results))
+
+    if args.write_db:
+        from .db import upsert_results  # local import: pymongo is only needed for this opt-in path
+
+        written = upsert_results(args.owner, results)
+        print(f"wrote {written} result(s) to MongoDB (owner={args.owner!r})")
 
 
 if __name__ == "__main__":

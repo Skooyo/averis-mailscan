@@ -1,4 +1,5 @@
 import "server-only";
+import { SHARED_OWNER } from "@/lib/constants";
 import { getMessage, gmailClient, isMissingMessageError, isReauthError } from "@/lib/gmail";
 import { GMAIL_READONLY } from "@/lib/google";
 import { connectDB } from "@/lib/mongodb";
@@ -7,7 +8,7 @@ import { unescapeNewlines } from "@/lib/text";
 import { Attachment } from "@/models/Attachment";
 import { Email } from "@/models/Email";
 import { User } from "@/models/User";
-import type { EmailDetail, InboxEmail } from "@/types/averis";
+import type { EmailCategory, EmailDetail, InboxEmail } from "@/types/averis";
 
 // Every read below is scoped with `visibleOwners(userEmail)`: the shared
 // dataset plus, when signed in, the user's own. Pass the email from
@@ -143,6 +144,28 @@ export async function getEmailDetail(docId: string, userEmail: string | null): P
       size: f.attachment.length,
     })),
   };
+}
+
+/**
+ * Minimal email info looked up by its business id (Email.id, e.g. "email_001") rather than the
+ * emails collection _id -- for pages keyed on that id, like /comparison/[emailId] (that route
+ * mirrors how the rest of the app already links to it: components/inbox-screen.tsx and
+ * app/emails/[emailId]/page.tsx both use `email.id`, not the docId, in that link). Returns null if
+ * no such id is visible to this user.
+ */
+export async function getEmailByBusinessId(
+  id: string,
+  userEmail: string | null,
+): Promise<{ subject: string | null; category: EmailCategory | null } | null> {
+  await connectDB();
+  const docs = await Email.find({ id, owner: { $in: visibleOwners(userEmail) } })
+    .select("owner id subject category")
+    .lean();
+  if (docs.length === 0) return null;
+  // Prefer the signed-in viewer's own email over the shared demo dataset's, in the unlikely event
+  // both exist under the same id (ids aren't globally unique, only per owner).
+  const doc = docs.find((d) => d.owner !== SHARED_OWNER) ?? docs[0];
+  return { subject: doc.subject ?? null, category: (doc.category as EmailCategory | null) ?? null };
 }
 
 /** The file for a download, or null if it doesn't exist or isn't visible to this user. */
