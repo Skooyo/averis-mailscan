@@ -1,21 +1,70 @@
 # TODO
 
-_Last updated: 2026-09-22 (fifth pass same day). Fourth pass implemented
-HANDOVER.md's plan item #5 (§9 below): `backend/db.py` (pymongo, opt-in
-`--write-db` on `backend/pipeline.py`) plus `frontend/src/models/Result.ts`
-and `frontend/src/lib/results.ts`, wiring `/comparison/[emailId]` and
-`/review` to real MongoDB `Result` docs instead of `data/averis-data.ts`'s
-mock. This is exactly what `clanker-food/claudes-plan.md` (the original
-architecture doc, written before the pipeline existed) called for under
-"Add a Python Mongo client (`backend/db.py` with pymongo, `MONGODB_URI`
-from `.env`) so the pipeline stages write to the same collections the
-frontend reads" — see "Known issues (fixed)" at the bottom for what's
-newly done and what's still open within each. This (fifth) pass live-
-verified the write path for the first time: `python -m backend.pipeline .
-5 --write-db` produced 5 real `Result` docs in Atlas, confirmed in Compass
-(§9). It also found the frontend read side can't actually be exercised
-yet — `frontend/.env` doesn't exist, only `.env.example` — so the read
-path is code-complete but still visually unconfirmed._
+_Last updated: 2026-09-22 (seventh pass same day). Sixth pass ran
+`python -m backend.convert` for real over all 250 attachments — 241/250
+converted, 9 failures, one of which (`email_499_BL.pdf: PdfminerException:
+Unexpected EOF`) was new, not one of the documented `500`–`520` edge cases.
+**This (seventh) pass fixed that finding and live-verified the vision-LLM
+OCR fallback for the first time:**
+- **`email_499_BL.pdf` root-caused and fixed.** Its `startxref` trailer
+  pointer was 50 bytes off (pointed into a stream's binary garbage instead
+  of the real `xref` keyword) — a genuinely corrupted source file, not a
+  bug in `detect_format()`'s magic-byte check. Added a `pikepdf` repair-
+  and-retry step to `backend/readers.py::_read_pdf`: when `pdfplumber.open()`
+  fails outright (before the existing no-text-layer/OCR branch even runs),
+  try `pikepdf`'s brute-force xref rebuild, then retry `pdfplumber` on the
+  repaired bytes; if repair also fails, the *original* pdfplumber error
+  still propagates unmasked (same "don't hide a different real error"
+  convention as the OCR fallbacks). `email_511`/`515_BL.pdf` — missing
+  their trailer dictionary entirely, not just a bad offset — confirmed
+  still unrecoverable even with `pikepdf`, correctly left as `read_error`s.
+  New dependency: `pikepdf>=9.0` (tested with 10.13.0.post1) in
+  `requirements.txt`. 2 new tests in `tests/test_readers.py`.
+- **`ENABLE_LLM_OCR_FALLBACK=1` is now set in this machine's `.env`
+  (someone flipped it since the sixth pass) — live-verified for the first
+  time.** Ran `python -m backend.convert` for real with both fixes in
+  place: **248/250 converted** (up from 241/250) — `email_499_BL.pdf` now
+  repairs and extracts real text, and all six `email_512`–`514_SI/BL.pdf`
+  scanned attachments now come back with real vision-LLM-transcribed text
+  instead of `pdf_no_text_layer`/`DefaultCredentialsError`. Only
+  `email_511`/`515_BL.pdf` still fail (genuinely unrecoverable). Took
+  ~76s wall-clock for the real vision calls. Document AI itself (§10) is
+  still blocked on this machine having no GCP Application Default
+  Credentials — the vision-LLM fallback is what's actually carrying
+  `512`–`514` right now, not Document AI.
+- **New finding: a Windows-only `pytest` + `pypdfium2` crash, unrelated to
+  the above fixes.** Running the real vision-LLM OCR path (`page.to_image()`
+  in `backend/ocr_llm.py::_render_page_png_b64`) *under `pytest`*
+  (`pytest tests/test_ingest.py`, or the full suite) throws a
+  `Windows fatal exception: access violation` inside `pypdfium2`'s native
+  library init. It does **not** fail any tests — pytest's fault handler
+  logs it and the suite still reports all-green (200 passed, 1 skipped) —
+  but it's a real native crash worth knowing about. Confirmed it's specific
+  to running under `pytest`: the identical code path via plain
+  `python -m backend.convert` / `python -m backend.ingest` (no pytest)
+  completes cleanly with no crash, correctly OCR'ing `512`–`514`. Also
+  confirmed it's **not** caused by the new `pikepdf` import (reproduced with
+  a single scanned file and zero PDF-repair code involved). Not
+  investigated further this pass — see "Known issues" below and
+  HANDOVER.md.
+
+This pass also corrected a **stale blocker** in §6/§9 below: "CLI/API
+surface for `backend/review.py` is blocked on `sample_submission.json`"
+was true when written, but the reasoning (a reviewer needs a *persisted*
+`email_id -> result` store, and that store's shape should follow the
+submission schema) stopped applying once `backend/db.py`'s MongoDB
+`results` collection was built (fourth pass) — that collection **is** the
+persisted store now, and its schema (`corrections[]`,
+`escalation.resolved`/`resolved_by`/`resolution_note`) was already
+designed to carry a corrected/resolved state independent of the hackathon
+submission format. The real remaining blockers are narrower: (a)
+`backend/db.py` has no "fetch one result by `email_id`" function yet —
+only `upsert_results()` — which retry/correction needs to look up current
+state before mutating it; (b) an unmade design decision on the surface
+itself (Python-only CLI vs. a frontend-triggered mutation, which would
+mean either porting retry logic to TypeScript or bridging across the
+Python/Next.js boundary that HANDOVER's design deliberately keeps
+Mongo-only). See the updated §6/§9 notes below._
 
 ## 🔴 Blocking — do these two first
 
@@ -55,6 +104,11 @@ path is code-complete but still visually unconfirmed._
       or `status="unclassified"` if classification is missing); only
       `comparison_request` emails still go through `compare_si_vs_bl`.
       Live-verified against `email_004`/`email_507` (see bottom of file).
+- [x] **`email_499_BL.pdf` finding from the sixth pass — root-caused and
+      fixed (seventh pass).** Its `startxref` pointer was 50 bytes short of
+      the real `xref` keyword (genuine source-file corruption, not a
+      `detect_format()` bug). Fixed with a `pikepdf` repair-and-retry step
+      in `_read_pdf`; see §10a below and HANDOVER's "Known issues".
 
 ## 2. Email classification
 
@@ -231,14 +285,24 @@ path is code-complete but still visually unconfirmed._
     historical record of what was originally wrong.
   - `mark_resolved(...)` for the "human looked at it, it's fine as-is, no
     value needs changing" case.
-  - **Still open**: no CLI or API surface calls these yet. Deliberately
-    not built this pass — a reviewer needs to look up a *persisted*
-    `email_id -> result` store to know what to retry/correct, and that
-    store's shape depends on the still-missing `sample_submission.json`
-    schema (the 🔴 blocking item). Building a CLI against a guessed shape
-    risked having to redo it once the real schema lands. These functions
-    are the primitives that CLI/API will call once #4 in the plan is
-    unblocked.
+  - **Still open**: no CLI or API surface calls these yet.
+    **Correction, 2026-09-22 (sixth pass): this is no longer blocked on
+    `sample_submission.json`.** That reasoning (needing a persisted
+    `email_id -> result` store whose shape follows the submission schema)
+    predates the Mongo integration — `backend/db.py`'s `results`
+    collection *is* that persisted store now, and `Result`'s schema
+    already carries `corrections[]`/`escalation.resolved`/`resolved_by`/
+    `resolution_note` independent of the hackathon output format. What's
+    actually still needed: (1) a "fetch one result by `email_id`" function
+    in `backend/db.py` (only `upsert_results()` exists today — nothing
+    reads a single doc back out); (2) a decision on the surface itself —
+    a Python-only CLI (`python -m backend.review retry/correct <email_id>
+    ...`, reads/writes Mongo directly, keeps HANDOVER's "frontend and
+    backend never call each other directly" design intact) vs. exposing
+    this from the `/review` UI, which is more valuable to a judge but
+    means either porting `retry_email`'s logic to TypeScript or bridging
+    across the Mongo-only boundary for the first time. Not decided yet —
+    flag to whoever picks this up.
 
 ## 7. End-to-end pipeline
 
@@ -299,19 +363,28 @@ path is code-complete but still visually unconfirmed._
   `backend/escalate.py` now classifies them: "Could not uniquely identify"
   becomes `ambiguous_si_bl`, anything else becomes `processing_error`.
   Confirmed live on `email_507`.
-- **Scanned PDFs (`email_512`–`514`) had no OCR path (fixed in code; not
-  yet live-verified end-to-end).** `readers.py::_read_pdf` now calls
-  `backend/ocr.py::ocr_pdf` whenever pdfplumber's own pass finds no text.
-  Live-checked against `attachments/email_512_SI.pdf`: the Document AI
-  config (`PROJECT_ID`/`PROCESSOR_ID`/`LOCATION`) is present and the code
-  reaches the real API, but this machine has no GCP Application Default
-  Credentials, so it currently fails with `DefaultCredentialsError` —
-  correctly surfaced as a `read_error` string rather than crashing or
-  silently masking as `pdf_no_text_layer`, but real OCR text hasn't
-  actually been produced from a live call yet. Whoever owns the GCP
-  project needs to run `gcloud auth application-default login` (or set
-  `GOOGLE_APPLICATION_CREDENTIALS` to a service account key) before this
-  can be confirmed working end-to-end.
+- **Scanned PDFs (`email_512`–`514`) had no OCR path (fixed in code, and
+  now live-verified end-to-end via the vision-LLM fallback — seventh
+  pass).** `readers.py::_read_pdf` calls `backend/ocr.py::ocr_pdf`
+  (Document AI) whenever pdfplumber's own pass finds no text, then
+  `backend/ocr_llm.py::llm_ocr_pdf` (vision LLM) if that's unavailable or
+  fails. Document AI itself still isn't live-verified (this machine has no
+  GCP Application Default Credentials — run `gcloud auth
+  application-default login` or set `GOOGLE_APPLICATION_CREDENTIALS` to
+  confirm it), but with `ENABLE_LLM_OCR_FALLBACK=1` now set, a real
+  `python -m backend.convert` run produced real transcribed text for all
+  six `512`–`514_SI/BL.pdf` attachments.
+- **`email_499_BL.pdf`'s corrupted xref table (fixed, seventh pass).** Its
+  `startxref` pointer was 50 bytes short of the real `xref` keyword —
+  genuine source-file corruption, not a `detect_format()` bug (that only
+  checks the first 4 bytes for `%PDF`, which this file has). Added a
+  `pikepdf` repair-and-retry step to `_read_pdf`: on any `pdfplumber.open()`
+  failure, try `pikepdf`'s brute-force xref rebuild and retry; if repair
+  also fails, the original pdfplumber error still propagates unmasked.
+  Confirmed `email_511`/`515_BL.pdf` (missing their trailer dictionary
+  entirely, a deeper corruption) are still correctly unrecoverable even
+  with this fix — `pikepdf` can't invent a missing trailer. New dependency:
+  `pikepdf>=9.0`.
 - **Duplicate attachments weren't handled (fixed).** Same document
   attached twice under different filenames would have been extracted
   twice (wasted LLM calls) and could trip a false `ambiguous_si_bl`
@@ -413,16 +486,16 @@ path is code-complete but still visually unconfirmed._
   - [x] BL value — same caveat as SI value above.
   - [x] Escalation reason — full `reasons[]` array (code + detail), not
         just one, on both `/review` and `/comparison/[emailId]`.
-- [ ] Add retry and human-review actions — **still not built**, same
-      reasoning as §6's "still open" note: `backend/review.py`'s
-      `retry_email`/`record_correction`/`apply_corrections`/
-      `mark_resolved` are library-level only, callable from Python, not
-      exposed as a mutation the frontend can trigger. The `Result` schema
-      was designed to represent a corrected/resolved state
+- [ ] Add retry and human-review actions — **still not built**, see §6's
+      updated "Still open" note (2026-09-22, sixth pass) for the corrected
+      blocker: not `sample_submission.json` anymore, just (1) a
+      `backend/db.py` function to read one `Result` back by `email_id`,
+      which doesn't exist yet, and (2) an undecided call on whether this
+      is a Python CLI or a frontend-triggered mutation. The `Result`
+      schema was designed to represent a corrected/resolved state
       (`corrections[]`, `escalation.resolved`/`resolved_by`/
-      `resolution_note`) so adding that surface later doesn't need a
-      schema change, but no write API or UI action was built this pass —
-      explicitly out of scope per this session's brief.
+      `resolution_note`) so adding either surface later doesn't need a
+      schema change.
 
 _Read side code-complete and now live-verified on the write side: 5 real
 `Result` docs exist in Atlas (`email_001`-`005`, owner=`shared`) from a
@@ -493,7 +566,13 @@ code: this machine has no GCP Application Default Credentials, so
 6. [ ] Run extraction over the full inbox — still only ever run in small
        batches (now 3 real attachments cached from this session's live
        checks: `email_004_SI/BL`, `email_507_SI`); `data/extractions.json`
-       still needs the other ~247 attachments (§4)
+       still needs the other ~247 attachments (§4). `python -m backend.convert`
+       has been run for real over all 250 attachments, most recently
+       (seventh pass, 2026-09-22) at **248/250 converted** — only
+       `email_511`/`515_BL.pdf` still fail, both confirmed genuinely
+       unrecoverable (see §10a). The actual
+       `python -m backend.pipeline . --write-db` full run has not been
+       kicked off yet — next step, queued.
 7. [x] ~~Extend `run_pipeline` to include every email (not just
        `comparison_request`) in its output, plus the escalate step~~
        (§1, §7) — done
@@ -506,7 +585,77 @@ code: this machine has no GCP Application Default Credentials, so
        not being set up on this machine, see §10 above
 11. [x] ~~Dedup logic for duplicated attachments~~ (§3) — done
 12. [x] ~~Retry and human correction workflows~~ (§6) — library-level
-       primitives done in `backend/review.py`; CLI/API surface still
-       needs the persisted results store #4/#8 unblocks
+       primitives done in `backend/review.py`; CLI/API surface still open,
+       but **not actually blocked on #4/#8 anymore** (corrected
+       2026-09-22, sixth pass) — see §6/§9's updated notes: real
+       remaining work is a `backend/db.py` single-result read function
+       plus a CLI-vs-frontend surface decision
 13. [x] ~~Classification regression tests + review beyond the labelled
        sample~~ (§2) — done, all offline/zero-cost
+14. [x] Add a vision-LLM OCR fallback for scanned PDFs (§10, sixth pass,
+       2026-09-22) — see §10's new entry below
+15. [x] Live-verify the vision-LLM OCR fallback + fix `email_499_BL.pdf`'s
+       corrupted xref via `pikepdf` (§10a, seventh pass, 2026-09-22) —
+       248/250 attachments now convert; only `511`/`515` remain, confirmed
+       genuinely unrecoverable. New known issue found, not yet fixed: a
+       Windows-only `pytest`+`pypdfium2` access-violation crash (see §10a).
+
+## 10a. LLM vision OCR fallback (new, sixth pass, 2026-09-22)
+
+- [x] **Added `backend/ocr_llm.py`: last-resort OCR fallback for scanned
+      PDFs, only tried after Document AI (§10) is unavailable or itself
+      fails.** Wired into `backend/readers.py::_read_pdf`, whose fallback
+      order is now: pdfplumber text layer -> Document AI OCR -> vision-LLM
+      transcription (renders each page to a PNG via pdfplumber's own
+      `page.to_image()`, sends it to the Gateway's vision-capable model,
+      asks for a verbatim transcription) -> give up (`pdf_no_text_layer`).
+      Explicitly never tried before Document AI — a dedicated OCR processor
+      is more accurate than a general chat model transcribing an image.
+- [x] **Gated behind `ENABLE_LLM_OCR_FALLBACK=1`, deliberately separate
+      from `AI_GATEWAY_API_KEY` being set — a real bug caught and fixed
+      live during this session, not just a defensive choice.** First
+      implementation checked only `AI_GATEWAY_API_KEY`. Running the full
+      test suite afterward took 98s instead of the usual ~29s, and printed
+      an unexplained mid-run stack trace — `AI_GATEWAY_API_KEY` is
+      genuinely configured on this machine (needed for classification/
+      extraction), so `test_ingest.py::test_full_inbox_shape` (reads the
+      real, unmocked `attachments/` folder) silently triggered real, billed
+      vision-LLM calls against `email_512`–`514` on every plain
+      `pytest tests/` run. Fixed by adding a separate opt-in env var,
+      checked first (before even importing pdfplumber to render an image) —
+      same reasoning as `RUN_LIVE_DB_TESTS=1` for `tests/test_db.py`'s live
+      Mongo test (§9): a key already configured for other legitimate
+      reasons must not silently enable a new expensive side effect. Fixed
+      run confirmed back at 29s, no stray network calls. See
+      `.env.example` for the new var.
+- [x] Tests: `tests/test_ocr_llm.py` (new, 5 tests — unavailable-when-
+      not-opted-in, unavailable-without-gateway-token, multi-page
+      transcription + join, `max_pages` cap, real-failure propagation) and
+      6 new/updated cases in `tests/test_readers.py` covering every branch
+      of the new 3-way fallback chain (both fallbacks unconfigured, OCR
+      unconfigured + LLM succeeds, OCR fails for real + LLM succeeds, OCR
+      fails for real + LLM also unconfigured -> original OCR error
+      surfaces, LLM configured but itself fails for real). Full suite:
+      195 passed, 1 skipped (live Mongo, correctly gated), 3 deselected
+      (live classify, run separately to avoid cost).
+- [x] **Live-verified against real scanned documents, seventh pass,
+      2026-09-22.** `ENABLE_LLM_OCR_FALLBACK=1` is now set in `.env`.
+      `python -m backend.convert` over all 250 real attachments produced
+      real transcribed text for all six `email_512`–`514_SI/BL.pdf`
+      attachments (previously `pdf_no_text_layer`/`DefaultCredentialsError`).
+      Document AI itself (§10) is still not live-verified — this machine
+      still has no GCP Application Default Credentials — so the vision-LLM
+      fallback, not Document AI, is what's actually recovering these six
+      files right now.
+- [ ] **New, seventh pass: `pytest` + `pypdfium2` crash on Windows,
+      unrelated to the OCR logic itself.** Running the real vision-LLM path
+      (`page.to_image()`) *under `pytest`* throws
+      `Windows fatal exception: access violation` inside `pypdfium2`'s
+      native init (`pytest tests/test_ingest.py` reproduces it with a
+      single scanned file, no other code involved). Doesn't fail any
+      tests — pytest's fault handler logs it and the suite still passes —
+      but it's a real crash. Confirmed absent when the same code runs via
+      plain `python -m backend.convert`/`ingest` (no pytest): completes
+      cleanly, ~76s, all 6 files OCR'd correctly. Not investigated further
+      this pass — worth a look if `pytest`'s own stdout/stderr capture on
+      Windows is interacting badly with `pypdfium2`'s native library init.

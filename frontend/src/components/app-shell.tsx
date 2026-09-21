@@ -79,7 +79,9 @@ export function AppShell({ user, children }: { user: CurrentUser | null; childre
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
             <span>Dashboard</span>
             <span>&gt;</span>
-            <Link href="/" className="font-semibold text-slate-900">Inbox</Link>
+            <Link href={isReviewActive ? "/review" : "/"} className="font-semibold text-slate-900">
+              {isReviewActive ? "Review" : "Inbox"}
+            </Link>
           </div>
 
           <div className="flex items-center gap-4">

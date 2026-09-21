@@ -19,23 +19,70 @@ def _read_txt(path: Path) -> str:
 def _read_pdf(path: Path) -> str:
     import pdfplumber
 
-    with pdfplumber.open(path) as pdf:
+    try:
+        pdf = pdfplumber.open(path)
+    except Exception as open_error:
+        # pdfplumber couldn't even open the file -- a broken container (bad
+        # xref offset, missing trailer), not a scanned/image PDF (those open
+        # fine; see the OCR fallback below, which only fires once pages are
+        # already in hand). Try pikepdf's repair mode (qpdf's brute-force
+        # object rescan) before giving up: it can rebuild a wrong xref table
+        # (e.g. email_499_BL.pdf, where startxref pointed 50 bytes short of
+        # the real xref keyword), but it can't invent a missing trailer
+        # dictionary, so a genuinely gutted file (email_511/515_BL.pdf) still
+        # fails here and the original pdfplumber error propagates unmasked.
+        import io
+
+        import pikepdf
+
+        try:
+            repaired = pikepdf.open(path)
+            buf = io.BytesIO()
+            repaired.save(buf)
+            buf.seek(0)
+            pdf = pdfplumber.open(buf)
+        except Exception as repair_error:
+            raise open_error from repair_error
+
+    with pdf:
         pages = [page.extract_text() or "" for page in pdf.pages]
     text = "\n\n".join(pages)
 
     if not text.strip():
         # Image-only scanned PDF -- pdfplumber found no text layer. Try
-        # Document AI OCR before giving up; if it's not configured in this
-        # environment, fall through to the pdf_no_text_layer read_error as
-        # before. Any other OCR failure (bad creds, quota, network) is left
-        # to propagate so it becomes its own read_error instead of being
-        # masked as "no text layer".
+        # Document AI OCR first; if it's not configured, or the live call
+        # fails for a real reason, fall back to a vision-capable LLM
+        # transcribing the page images (backend/ocr_llm.py) -- a last
+        # resort only, never tried before Document AI, since a dedicated
+        # OCR processor is more accurate than a general chat model. The LLM
+        # fallback itself is further gated on ENABLE_LLM_OCR_FALLBACK=1 (see
+        # backend/ocr_llm.py's docstring) so it never fires just because
+        # AI_GATEWAY_API_KEY happens to be configured for other stages. If
+        # neither is available, fall through to pdf_no_text_layer as before.
         from .ocr import OCRUnavailable, ocr_pdf
 
+        doc_ai_error: Exception | None = None
         try:
             text = ocr_pdf(path)
         except OCRUnavailable:
             pass
+        except Exception as e:
+            doc_ai_error = e
+
+        if not text.strip():
+            from .ocr_llm import LLMOCRUnavailable, llm_ocr_pdf
+
+            try:
+                text = llm_ocr_pdf(path)
+            except LLMOCRUnavailable:
+                if doc_ai_error is not None:
+                    # Document AI was configured and genuinely failed; the LLM
+                    # fallback just isn't configured either -- surface the
+                    # original, more specific failure rather than masking it.
+                    raise doc_ai_error
+                # neither fallback is configured -- pdf_no_text_layer, unchanged
+            except Exception as llm_error:
+                raise llm_error from doc_ai_error
 
     return text
 

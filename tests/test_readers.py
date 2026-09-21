@@ -175,6 +175,75 @@ def test_read_attachment_never_raises_on_reader_exception(tmp_path, monkeypatch)
     assert error == "RuntimeError: simulated parser crash"
 
 
+def test_read_pdf_repairs_broken_xref_via_pikepdf(tmp_path, monkeypatch):
+    # pdfplumber can't even open the file (e.g. a startxref pointer that's off
+    # by a few bytes) -- pikepdf's repair should rebuild it and pdfplumber
+    # should then succeed on the repaired bytes.
+    p = tmp_path / "broken_xref.pdf"
+    p.write_bytes(b"%PDF-1.4\nnot actually parseable")
+
+    import pdfplumber
+
+    real_open = pdfplumber.open
+    calls = []
+
+    def fake_pdfplumber_open(target):
+        calls.append(target)
+        if target is p or target == p:
+            raise Exception("Unexpected EOF")
+        return _FakePdfWithText()
+
+    class _FakeRepairedPdf:
+        def save(self, buf):
+            buf.write(b"repaired bytes")
+
+    monkeypatch.setattr(pdfplumber, "open", fake_pdfplumber_open)
+    monkeypatch.setattr("pikepdf.open", lambda path: _FakeRepairedPdf())
+
+    text, error = read_attachment(p)
+
+    assert error is None
+    assert text == "recovered text"
+
+
+def test_read_pdf_propagates_original_error_when_repair_also_fails(tmp_path, monkeypatch):
+    # A genuinely gutted PDF (missing trailer, e.g. email_511/515_BL.pdf) --
+    # pikepdf can't repair it either, so the original pdfplumber error should
+    # surface, not a pikepdf-specific one.
+    p = tmp_path / "unrecoverable.pdf"
+    p.write_bytes(b"%PDF-1.4\nnot actually parseable")
+
+    import pdfplumber
+
+    def raise_open_error(path):
+        raise Exception("No /Root object! - Is this really a PDF?")
+
+    def raise_repair_error(path):
+        raise Exception("unable to find trailer dictionary while recovering damaged file")
+
+    monkeypatch.setattr(pdfplumber, "open", raise_open_error)
+    monkeypatch.setattr("pikepdf.open", raise_repair_error)
+
+    text, error = read_attachment(p)
+
+    assert text is None
+    assert error == "Exception: No /Root object! - Is this really a PDF?"
+
+
+class _FakePdfWithText:
+    class _FakePage:
+        def extract_text(self):
+            return "recovered text"
+
+    pages = [_FakePage()]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
 class _FakePdfNoTextLayer:
     """Simulates pdfplumber.open() against an image-only scanned PDF."""
 
@@ -213,13 +282,18 @@ def test_read_pdf_reports_pdf_no_text_layer_when_ocr_unconfigured(tmp_path, monk
     import pdfplumber
 
     from backend.ocr import OCRUnavailable
+    from backend.ocr_llm import LLMOCRUnavailable
 
     monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
 
     def raise_unavailable(path):
         raise OCRUnavailable("not configured")
 
+    def raise_llm_unavailable(path):
+        raise LLMOCRUnavailable("not configured")
+
     monkeypatch.setattr("backend.ocr.ocr_pdf", raise_unavailable)
+    monkeypatch.setattr("backend.ocr_llm.llm_ocr_pdf", raise_llm_unavailable)
 
     text, error = read_attachment(p)
 
@@ -228,6 +302,60 @@ def test_read_pdf_reports_pdf_no_text_layer_when_ocr_unconfigured(tmp_path, monk
 
 
 def test_read_pdf_propagates_real_ocr_failures_as_read_error(tmp_path, monkeypatch):
+    # Document AI is configured but genuinely fails, and the LLM fallback
+    # isn't configured either -- the original, more specific Document AI
+    # error should surface, not get masked by the fallback being unavailable.
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    from backend.ocr_llm import LLMOCRUnavailable
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+
+    def raise_real_error(path):
+        raise RuntimeError("Document AI quota exceeded")
+
+    def raise_llm_unavailable(path):
+        raise LLMOCRUnavailable("not configured")
+
+    monkeypatch.setattr("backend.ocr.ocr_pdf", raise_real_error)
+    monkeypatch.setattr("backend.ocr_llm.llm_ocr_pdf", raise_llm_unavailable)
+
+    text, error = read_attachment(p)
+
+    assert text is None
+    assert error == "RuntimeError: Document AI quota exceeded"
+
+
+def test_read_pdf_falls_back_to_llm_vision_when_ocr_unconfigured(tmp_path, monkeypatch):
+    # Document AI isn't configured at all -- the LLM vision fallback should
+    # still be tried before giving up as pdf_no_text_layer.
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    from backend.ocr import OCRUnavailable
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+
+    def raise_unavailable(path):
+        raise OCRUnavailable("not configured")
+
+    monkeypatch.setattr("backend.ocr.ocr_pdf", raise_unavailable)
+    monkeypatch.setattr("backend.ocr_llm.llm_ocr_pdf", lambda path: "LLM-transcribed shipping text")
+
+    text, error = read_attachment(p)
+
+    assert error is None
+    assert text == "LLM-transcribed shipping text"
+
+
+def test_read_pdf_falls_back_to_llm_vision_when_ocr_fails_for_real(tmp_path, monkeypatch):
+    # Document AI is configured but genuinely fails (not just unconfigured)
+    # -- the LLM fallback should still get a shot, as the true last resort.
     p = tmp_path / "scanned.pdf"
     p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
 
@@ -239,11 +367,39 @@ def test_read_pdf_propagates_real_ocr_failures_as_read_error(tmp_path, monkeypat
         raise RuntimeError("Document AI quota exceeded")
 
     monkeypatch.setattr("backend.ocr.ocr_pdf", raise_real_error)
+    monkeypatch.setattr("backend.ocr_llm.llm_ocr_pdf", lambda path: "LLM-transcribed shipping text")
+
+    text, error = read_attachment(p)
+
+    assert error is None
+    assert text == "LLM-transcribed shipping text"
+
+
+def test_read_pdf_propagates_real_llm_vision_failures_as_read_error(tmp_path, monkeypatch):
+    # Both fallbacks are configured; Document AI isn't, but the LLM vision
+    # call itself genuinely fails -- that should surface, not get swallowed.
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\nfake scanned pdf, no text layer")
+
+    import pdfplumber
+
+    from backend.ocr import OCRUnavailable
+
+    monkeypatch.setattr(pdfplumber, "open", lambda path: _FakePdfNoTextLayer())
+
+    def raise_unavailable(path):
+        raise OCRUnavailable("not configured")
+
+    def raise_llm_real_error(path):
+        raise RuntimeError("Gateway 500")
+
+    monkeypatch.setattr("backend.ocr.ocr_pdf", raise_unavailable)
+    monkeypatch.setattr("backend.ocr_llm.llm_ocr_pdf", raise_llm_real_error)
 
     text, error = read_attachment(p)
 
     assert text is None
-    assert error == "RuntimeError: Document AI quota exceeded"
+    assert error == "RuntimeError: Gateway 500"
 
 
 def test_read_attachment_non_ascii_content_end_to_end(tmp_path):

@@ -57,6 +57,14 @@ def _gateway_token() -> str | None:
     return os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN")
 
 
+def gateway_configured() -> bool:
+    """Whether a Gateway token is set -- used by backend/ocr_llm.py to decide
+    "unavailable" (skip straight to LLMOCRUnavailable, no image rendering)
+    vs. "configured but the call itself failed" (a real error worth
+    surfacing), same distinction backend/ocr.py draws for Document AI."""
+    return bool(_gateway_token())
+
+
 def _groq_enabled() -> bool:
     return bool(os.environ.get("GROQ_API_KEY"))
 
@@ -127,23 +135,40 @@ def _coerce_to_schema_shape(text: str, schema: type[BaseModel]) -> str:
     """Some models return a bare array (or wrap it under an unexpected key) even when the
     schema asks for a single-array-field object, e.g. {"results": [...]}. If schema is
     exactly one object with one array-typed property, adapt a bare list -- or an object
-    holding exactly one list -- into that shape. Returns text unchanged if it doesn't apply."""
+    holding exactly one list -- into that shape. Returns text unchanged if it doesn't apply.
+
+    Mirror case, added after backend/ocr_llm.py's vision transcription call (schema
+    {"text": str}) live-reproduced it against email_513_SI.pdf: a schema with exactly one
+    *string*-typed property, but the model wraps its answer in a bare list of objects (each
+    carrying that field, plus whatever extra keys it invented, e.g.
+    [{"type": "PageTranscript", "text": "..."}]) instead of a single object. Join every list
+    item's value for that field, in order.
+    """
     try:
         data = json.loads(text)
     except (json.JSONDecodeError, TypeError):
         return text
 
-    array_fields = [k for k, v in schema.model_json_schema().get("properties", {}).items() if v.get("type") == "array"]
-    if len(array_fields) != 1:
-        return text
-    field = array_fields[0]
+    properties = schema.model_json_schema().get("properties", {})
 
-    if isinstance(data, list):
-        return json.dumps({field: data})
-    if isinstance(data, dict) and field not in data:
-        list_items = [v for v in data.values() if isinstance(v, list)]
-        if len(list_items) == 1:
-            return json.dumps({field: list_items[0]})
+    array_fields = [k for k, v in properties.items() if v.get("type") == "array"]
+    if len(array_fields) == 1:
+        field = array_fields[0]
+        if isinstance(data, list):
+            return json.dumps({field: data})
+        if isinstance(data, dict) and field not in data:
+            list_items = [v for v in data.values() if isinstance(v, list)]
+            if len(list_items) == 1:
+                return json.dumps({field: list_items[0]})
+        return text
+
+    string_fields = [k for k, v in properties.items() if v.get("type") == "string"]
+    if len(properties) == 1 and len(string_fields) == 1 and isinstance(data, list):
+        field = string_fields[0]
+        parts = [item[field] for item in data if isinstance(item, dict) and isinstance(item.get(field), str)]
+        if len(parts) == len(data) and parts:
+            return json.dumps({field: "\n\n".join(parts)})
+
     return text
 
 
@@ -263,6 +288,73 @@ async def _gateway_astructured_completion(system: str, user: str, schema: type[T
             if waits > GATEWAY_MAX_WAITS:
                 response.raise_for_status()
             await asyncio.sleep(_gateway_retry_after_seconds(response))
+            continue
+        response.raise_for_status()
+        try:
+            return _parse(_gateway_content(response), schema)
+        except ValidationError as e:
+            if last_error is not None:
+                raise
+            last_error = e
+
+
+# --- Vercel AI Gateway, vision (last-resort OCR fallback only) --------------
+# Used only by backend/ocr_llm.py, itself only reached after Document AI OCR
+# (backend/ocr.py) has already been tried and either isn't configured or
+# failed -- see readers.py::_read_pdf for the exact order. No Groq fallback:
+# GROQ_MODEL (openai/gpt-oss-120b) isn't vision-capable, and every caller
+# here is already a last resort, so there's nothing left to fall back to.
+
+
+def vision_structured_completion(
+    system: str, user: str, image_b64_png: str, schema: type[T], model: str | None = None
+) -> T:
+    """Like _gateway_structured_completion, but the user message also carries
+    one base64-encoded PNG image (OpenAI-compatible `image_url` content
+    part). Raises GatewayAuthError if no token is configured -- callers that
+    want "unavailable" treated differently from "configured but failed"
+    should check gateway_configured() first, the way backend/ocr_llm.py
+    does, rather than relying on exception type alone."""
+    token = _gateway_token()
+    if not token:
+        raise GatewayAuthError("AI_GATEWAY_API_KEY is not set")
+
+    body = {
+        "model": model or GATEWAY_MODEL,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": system + FORMAT_HINT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64_png}"}},
+                ],
+            },
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": schema.__name__, "schema": strict_schema(schema)},
+        },
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+    last_error: Exception | None = None
+    waits = 0
+    while True:
+        try:
+            response = get_client().post("/chat/completions", json=body, headers=headers)
+        except httpx.TransportError:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                raise
+            time.sleep(5.0)
+            continue
+        _check_gateway_auth(response)
+        if response.status_code == 429 or response.status_code >= 500:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                response.raise_for_status()
+            time.sleep(_gateway_retry_after_seconds(response))
             continue
         response.raise_for_status()
         try:
