@@ -38,7 +38,7 @@ def test_clean_body_strips_banner_and_signature():
     assert "Best Regards" not in cleaned and "Kindly verify" in cleaned
 
 
-def test_strict_schema_is_groq_compatible():
+def test_strict_schema_is_structured_output_compatible():
     s = strict_schema(ClassificationBatch)
     assert s["additionalProperties"] is False
     item = s["$defs"]["ClassificationItem"]
@@ -111,9 +111,9 @@ def test_labels_sample_is_well_formed():
         assert (ROOT / "inbox" / f"{eid}.json").is_file()
 
 
-@pytest.mark.skipif(not os.environ.get("GROQ_API_KEY"), reason="needs GROQ_API_KEY")
+@pytest.mark.skipif(not os.environ.get("AI_GATEWAY_API_KEY"), reason="needs AI_GATEWAY_API_KEY")
 @pytest.mark.parametrize("n,expected", [(1, "comparison_request"), (2, "invoice_query"), (72, "spam")])
-def test_live_groq_classification(n, expected):
+def test_live_gateway_classification(n, expected):
     result = clf.classify_email(email(n))
     assert result.category == expected, result
     assert result.confidence >= 0.6

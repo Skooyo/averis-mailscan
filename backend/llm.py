@@ -1,48 +1,100 @@
-"""Thin provider adapter: structured (JSON-schema) completions via Groq.
+"""Thin provider adapter: structured (JSON-schema) completions.
 
-Every LLM stage calls structured_completion()/astructured_completion() with a
-pydantic schema and gets a validated model back. Swap provider/model here only.
+Primary provider is the Vercel AI Gateway (the same one
+frontend/src/lib/classify.ts uses). Groq is kept as a fallback for when the
+Gateway is rate-limited, erroring, or its key is unset/rejected -- set
+GROQ_API_KEY to enable it; without it, a Gateway failure just raises as
+before. Every LLM stage calls structured_completion()/astructured_completion()
+with a pydantic schema and gets a validated model back -- this is the only
+file that knows about either provider.
 """
 
 import asyncio
 import copy
+import json
 import os
 import re
+import sys
 import time
 from typing import TypeVar
 
+import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
 load_dotenv()
 
-DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+# --- Vercel AI Gateway (primary) --------------------------------------------
+# https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions
+
+GATEWAY_BASE_URL = os.environ.get("AI_GATEWAY_BASE_URL", "https://ai-gateway.vercel.sh/v1")
+GATEWAY_MODEL = os.environ.get("AI_GATEWAY_MODEL", "alibaba/qwen3.8-omni-flash")
+GATEWAY_MAX_WAITS = 3  # kept short -- the Groq fallback below picks up from here
+
+# --- Groq (fallback only) ----------------------------------------------------
+
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+GROQ_MAX_WAITS = 30  # last resort -- nothing left to fall back to past this
+
 T = TypeVar("T", bound=BaseModel)
+
+# Not every model behind the gateway enforces response_format, so also spell it out in words --
+# matches the guard frontend/src/lib/classify.ts uses for the same reason.
+FORMAT_HINT = "\n\nReply with only valid JSON matching the response schema -- no markdown code fences, no other text."
 
 _client = None
 _async_client = None
+_groq_client = None
+_groq_async_client = None
 
 
-def get_client():
+class GatewayAuthError(Exception):
+    """401/402/403 from the AI Gateway -- bad key, or the account has no credit left. Doesn't fix itself."""
+
+
+def _gateway_token() -> str | None:
+    """The AI Gateway API key, or (when running on Vercel) its OIDC token."""
+    return os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN")
+
+
+def _groq_enabled() -> bool:
+    return bool(os.environ.get("GROQ_API_KEY"))
+
+
+def get_client() -> httpx.Client:
     global _client
     if _client is None:
-        from groq import Groq
-
-        _client = Groq(max_retries=2)  # reads GROQ_API_KEY; retries honour retry-after on 429
+        _client = httpx.Client(base_url=GATEWAY_BASE_URL, timeout=60.0)
     return _client
 
 
-def get_async_client():
+def get_async_client() -> httpx.AsyncClient:
     global _async_client
     if _async_client is None:
-        from groq import AsyncGroq
-
-        _async_client = AsyncGroq(max_retries=2)
+        _async_client = httpx.AsyncClient(base_url=GATEWAY_BASE_URL, timeout=60.0)
     return _async_client
 
 
+def get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+
+        _groq_client = Groq(max_retries=2)  # reads GROQ_API_KEY
+    return _groq_client
+
+
+def get_groq_async_client():
+    global _groq_async_client
+    if _groq_async_client is None:
+        from groq import AsyncGroq
+
+        _groq_async_client = AsyncGroq(max_retries=2)
+    return _groq_async_client
+
+
 def strict_schema(model: type[BaseModel]) -> dict:
-    """Pydantic JSON schema tightened for Groq strict mode: every object gets
+    """Pydantic JSON schema tightened for structured-output mode: every object gets
     additionalProperties=false and all properties required."""
     schema = copy.deepcopy(model.model_json_schema())
 
@@ -61,7 +113,170 @@ def strict_schema(model: type[BaseModel]) -> dict:
     return schema
 
 
-def _request_kwargs(system: str, user: str, schema: type[BaseModel], model: str) -> dict:
+# --- response parsing (shared by both providers) -----------------------------
+
+_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
+
+
+def _unfence(text: str) -> str:
+    """Some models wrap JSON in a Markdown code fence even when asked not to."""
+    return _FENCE_RE.sub("", text.strip())
+
+
+def _coerce_to_schema_shape(text: str, schema: type[BaseModel]) -> str:
+    """Some models return a bare array (or wrap it under an unexpected key) even when the
+    schema asks for a single-array-field object, e.g. {"results": [...]}. If schema is
+    exactly one object with one array-typed property, adapt a bare list -- or an object
+    holding exactly one list -- into that shape. Returns text unchanged if it doesn't apply."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+
+    array_fields = [k for k, v in schema.model_json_schema().get("properties", {}).items() if v.get("type") == "array"]
+    if len(array_fields) != 1:
+        return text
+    field = array_fields[0]
+
+    if isinstance(data, list):
+        return json.dumps({field: data})
+    if isinstance(data, dict) and field not in data:
+        list_items = [v for v in data.values() if isinstance(v, list)]
+        if len(list_items) == 1:
+            return json.dumps({field: list_items[0]})
+    return text
+
+
+def _parse(content: str, schema: type[T]) -> T:
+    unfenced = _unfence(content)
+    coerced = _coerce_to_schema_shape(unfenced, schema)
+    last_error: ValidationError | None = None
+    for candidate in dict.fromkeys([content, unfenced, coerced]):  # dedup, keep order
+        try:
+            return schema.model_validate_json(candidate)
+        except ValidationError as e:
+            last_error = e
+    assert last_error is not None
+    raise last_error
+
+
+# --- Vercel AI Gateway calls --------------------------------------------------
+
+_RETRY_IN_RE = re.compile(r"try again in ([\d.]+)s")
+
+
+def _gateway_request_body(system: str, user: str, schema: type[BaseModel], model: str) -> dict:
+    return {
+        "model": model,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": system + FORMAT_HINT},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": schema.__name__, "schema": strict_schema(schema)},
+        },
+    }
+
+
+def _gateway_content(response: httpx.Response) -> str:
+    return response.json()["choices"][0]["message"]["content"]
+
+
+def _gateway_retry_after_seconds(response: httpx.Response) -> float:
+    """How long to wait before retrying: the gateway's retry-after header, else a
+    "try again in Ns" in the body, else 15s (also used as a flat backoff for 5xxs)."""
+    header = response.headers.get("retry-after")
+    if header:
+        try:
+            return float(header) + 1
+        except ValueError:
+            pass
+    m = _RETRY_IN_RE.search(response.text)
+    return float(m.group(1)) + 1 if m else 15.0
+
+
+def _check_gateway_auth(response: httpx.Response) -> None:
+    if response.status_code in (401, 402, 403):
+        raise GatewayAuthError(
+            f"AI Gateway refused the request ({response.status_code}): "
+            "check AI_GATEWAY_API_KEY and the account's credit"
+        )
+
+
+def _gateway_structured_completion(system: str, user: str, schema: type[T], model: str) -> T:
+    token = _gateway_token()
+    if not token:
+        raise GatewayAuthError("AI_GATEWAY_API_KEY is not set")
+
+    body = _gateway_request_body(system, user, schema, model)
+    headers = {"Authorization": f"Bearer {token}"}
+    last_error: Exception | None = None
+    waits = 0
+    while True:
+        try:
+            response = get_client().post("/chat/completions", json=body, headers=headers)
+        except httpx.TransportError:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                raise
+            time.sleep(5.0)
+            continue
+        _check_gateway_auth(response)  # unretryable -- raises straight out, caller may fall back
+        if response.status_code == 429 or response.status_code >= 500:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                response.raise_for_status()
+            time.sleep(_gateway_retry_after_seconds(response))
+            continue
+        response.raise_for_status()
+        try:
+            return _parse(_gateway_content(response), schema)
+        except ValidationError as e:  # one retry if the model returns invalid JSON
+            if last_error is not None:
+                raise
+            last_error = e
+
+
+async def _gateway_astructured_completion(system: str, user: str, schema: type[T], model: str) -> T:
+    token = _gateway_token()
+    if not token:
+        raise GatewayAuthError("AI_GATEWAY_API_KEY is not set")
+
+    body = _gateway_request_body(system, user, schema, model)
+    headers = {"Authorization": f"Bearer {token}"}
+    last_error: Exception | None = None
+    waits = 0
+    while True:
+        try:
+            response = await get_async_client().post("/chat/completions", json=body, headers=headers)
+        except httpx.TransportError:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                raise
+            await asyncio.sleep(5.0)
+            continue
+        _check_gateway_auth(response)
+        if response.status_code == 429 or response.status_code >= 500:
+            waits += 1
+            if waits > GATEWAY_MAX_WAITS:
+                response.raise_for_status()
+            await asyncio.sleep(_gateway_retry_after_seconds(response))
+            continue
+        response.raise_for_status()
+        try:
+            return _parse(_gateway_content(response), schema)
+        except ValidationError as e:
+            if last_error is not None:
+                raise
+            last_error = e
+
+
+# --- Groq calls (fallback only) ----------------------------------------------
+
+
+def _groq_request_kwargs(system: str, user: str, schema: type[BaseModel], model: str) -> dict:
     kwargs = {
         "model": model,
         "temperature": 0,
@@ -79,17 +294,7 @@ def _request_kwargs(system: str, user: str, schema: type[BaseModel], model: str)
     return kwargs
 
 
-def _parse(content: str, schema: type[T]) -> T:
-    return schema.model_validate_json(content)
-
-
-_RETRY_IN_RE = re.compile(r"try again in ([\d.]+)s")
-MAX_RATE_LIMIT_WAITS = 30
-
-
-def _retry_after_seconds(err: Exception) -> float:
-    """How long to wait before retrying: Groq's retry-after header, else the 429 message, else 15s
-    (also used as a flat backoff for transient connection errors)."""
+def _groq_retry_after_seconds(err: Exception) -> float:
     headers = getattr(getattr(err, "response", None), "headers", None) or {}
     if headers.get("retry-after"):
         try:
@@ -100,43 +305,20 @@ def _retry_after_seconds(err: Exception) -> float:
     return float(m.group(1)) + 1 if m else 15.0
 
 
-def structured_completion(system: str, user: str, schema: type[T], model: str = DEFAULT_MODEL) -> T:
+def _groq_structured_completion(system: str, user: str, schema: type[T], model: str) -> T:
     from groq import APIConnectionError, RateLimitError
 
-    kwargs = _request_kwargs(system, user, schema, model)
+    kwargs = _groq_request_kwargs(system, user, schema, model)
     last_error: Exception | None = None
     waits = 0
     while True:
         try:
-            resp = get_client().chat.completions.create(**kwargs)
+            resp = get_groq_client().chat.completions.create(**kwargs)
         except (RateLimitError, APIConnectionError) as e:
             waits += 1
-            if waits > MAX_RATE_LIMIT_WAITS:
+            if waits > GROQ_MAX_WAITS:
                 raise
-            time.sleep(_retry_after_seconds(e))
-            continue
-        try:
-            return _parse(resp.choices[0].message.content, schema)
-        except ValidationError as e:  # one retry if the model returns invalid JSON
-            if last_error is not None:
-                raise
-            last_error = e
-
-
-async def astructured_completion(system: str, user: str, schema: type[T], model: str = DEFAULT_MODEL) -> T:
-    from groq import APIConnectionError, RateLimitError
-
-    kwargs = _request_kwargs(system, user, schema, model)
-    last_error: Exception | None = None
-    waits = 0
-    while True:
-        try:
-            resp = await get_async_client().chat.completions.create(**kwargs)
-        except (RateLimitError, APIConnectionError) as e:
-            waits += 1
-            if waits > MAX_RATE_LIMIT_WAITS:
-                raise
-            await asyncio.sleep(_retry_after_seconds(e))
+            time.sleep(_groq_retry_after_seconds(e))
             continue
         try:
             return _parse(resp.choices[0].message.content, schema)
@@ -144,3 +326,67 @@ async def astructured_completion(system: str, user: str, schema: type[T], model:
             if last_error is not None:
                 raise
             last_error = e
+
+
+async def _groq_astructured_completion(system: str, user: str, schema: type[T], model: str) -> T:
+    from groq import APIConnectionError, RateLimitError
+
+    kwargs = _groq_request_kwargs(system, user, schema, model)
+    last_error: Exception | None = None
+    waits = 0
+    while True:
+        try:
+            resp = await get_groq_async_client().chat.completions.create(**kwargs)
+        except (RateLimitError, APIConnectionError) as e:
+            waits += 1
+            if waits > GROQ_MAX_WAITS:
+                raise
+            await asyncio.sleep(_groq_retry_after_seconds(e))
+            continue
+        try:
+            return _parse(resp.choices[0].message.content, schema)
+        except ValidationError as e:
+            if last_error is not None:
+                raise
+            last_error = e
+
+
+# --- public entry points: Gateway first, Groq on failure --------------------
+
+
+def structured_completion(system: str, user: str, schema: type[T], model: str | None = None) -> T:
+    gateway_error: Exception | None = None
+    if _gateway_token():
+        try:
+            return _gateway_structured_completion(system, user, schema, model or GATEWAY_MODEL)
+        except Exception as e:
+            if not _groq_enabled():
+                raise
+            print(f"[llm] AI Gateway failed ({e!r}); falling back to Groq", file=sys.stderr)
+            gateway_error = e
+    elif not _groq_enabled():
+        raise GatewayAuthError("Neither AI_GATEWAY_API_KEY nor GROQ_API_KEY is set")
+
+    try:
+        return _groq_structured_completion(system, user, schema, model or GROQ_MODEL)
+    except Exception as groq_error:
+        raise groq_error from gateway_error
+
+
+async def astructured_completion(system: str, user: str, schema: type[T], model: str | None = None) -> T:
+    gateway_error: Exception | None = None
+    if _gateway_token():
+        try:
+            return await _gateway_astructured_completion(system, user, schema, model or GATEWAY_MODEL)
+        except Exception as e:
+            if not _groq_enabled():
+                raise
+            print(f"[llm] AI Gateway failed ({e!r}); falling back to Groq", file=sys.stderr)
+            gateway_error = e
+    elif not _groq_enabled():
+        raise GatewayAuthError("Neither AI_GATEWAY_API_KEY nor GROQ_API_KEY is set")
+
+    try:
+        return await _groq_astructured_completion(system, user, schema, model or GROQ_MODEL)
+    except Exception as groq_error:
+        raise groq_error from gateway_error

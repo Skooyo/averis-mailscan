@@ -2,6 +2,14 @@
 
 _Last updated: 2026-09-21. Classification run complete: 520/520, 100% on the 45-email labelled sample._
 
+_2026-09-22 amendment: `backend/llm.py` was switched from Groq to the Vercel
+AI Gateway (`AI_GATEWAY_API_KEY`, default model `alibaba/qwen3.8-omni-flash`)
+— the same provider `frontend/src/lib/classify.ts` already used, so both
+classifiers now share one key. `cp .env.example .env` now needs
+`AI_GATEWAY_API_KEY`, not `GROQ_API_KEY`. The Groq-specific numbers below
+(free-tier limits, `openai/gpt-oss-120b`, `reasoning_effort`) describe the
+original design and no longer reflect the running code._
+
 ## What we're building
 
 An inbox-processing pipeline for a shipping-documentation team:

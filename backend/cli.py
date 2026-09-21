@@ -56,7 +56,7 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="python -m backend.cli")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    c = sub.add_parser("classify", help="classify inbox emails via Groq")
+    c = sub.add_parser("classify", help="classify inbox emails via the AI Gateway")
     c.add_argument("--force", action="store_true", help="ignore cache and re-classify")
     c.add_argument("--limit", type=int, default=None, help="only the first N emails")
     c.add_argument("--concurrency", type=int, default=1)

@@ -4,9 +4,9 @@ Category is decided by what the sender is ASKING FOR in the body. Attachment
 presence/readability is deliberately not a category signal — that is the
 escalation stage's job.
 
-Emails are classified in batches (default 10 per call) to stay inside Groq's
-free-tier token budget: the system prompt is paid once per batch, and bodies
-are stripped of banners/signatures before rendering.
+Emails are classified in batches (default 10 per call) to keep well inside
+the AI Gateway's rate limits: the system prompt is paid once per batch, and
+bodies are stripped of banners/signatures before rendering.
 """
 
 import asyncio

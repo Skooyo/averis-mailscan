@@ -36,7 +36,7 @@ Ingestion → Classification → (comparison requests: Extraction → Comparison
 |---|---|---|
 | Attachment → text | `backend/readers.py`, `backend/convert.py` | done |
 | Ingestion | `backend/ingest.py` | done |
-| Classification | `backend/classify.py`, `backend/llm.py` (Groq) | done |
+| Classification | `backend/classify.py`, `backend/llm.py` (Vercel AI Gateway) | done |
 | Extraction | | todo |
 | Comparison | | todo |
 | Escalation | | todo |
@@ -74,21 +74,23 @@ python -m pytest tests/           # tests
 
 ### Classification
 
-One Groq call per email (`openai/gpt-oss-120b`, strict JSON-schema output,
-temperature 0) → `category`, `confidence`, `reasoning`. Category is decided
-by the sender's intent in the body; subjects in this dataset are unreliable
-and attachment presence is left to the escalation stage. Results are cached
-in `data/classifications.json` so teammates without a key can build on them.
+One AI Gateway call per email (`alibaba/qwen3.8-omni-flash` by default,
+JSON-schema output, temperature 0) → `category`, `confidence`, `reasoning`.
+Category is decided by the sender's intent in the body; subjects in this
+dataset are unreliable and attachment presence is left to the escalation
+stage. Results are cached in `data/classifications.json` so teammates
+without a key can build on them. The same key and provider back the
+frontend's Gmail-sync classifier (`frontend/src/lib/classify.ts`).
 
 ```bash
-cp .env.example .env                    # then fill in GROQ_API_KEY
+cp .env.example .env                    # then fill in AI_GATEWAY_API_KEY
 python -m backend.cli classify --limit 10
 python -m backend.cli classify          # all 520, resumable
 python -m backend.cli eval-classify     # accuracy vs tests/labels_sample.json
 ```
 
-`backend/llm.py` is the only file that knows about Groq — swap provider or
-model (`GROQ_MODEL` env var) there.
+`backend/llm.py` is the only file that knows about the AI Gateway — swap
+provider or model (`AI_GATEWAY_MODEL` / `AI_GATEWAY_BASE_URL` env vars) there.
 
 ## Experiments
 
