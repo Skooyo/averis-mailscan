@@ -1,2 +1,4 @@
-apiDetails.env
+.env
 .venv/
+credentials.json
+token.json
