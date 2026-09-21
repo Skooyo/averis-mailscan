@@ -2,6 +2,8 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 import json
 
+from backend.llm import astructured_completion
+
 class ComparisonDetail(BaseModel):
     left: Any = None
     right: Any = None
