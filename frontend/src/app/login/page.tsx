@@ -41,7 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500 text-white shadow-sm">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">Averis</span>
+          <span className="text-xl font-bold tracking-tight text-slate-900">MailScan</span>
         </div>
 
         <h1 className="mt-6 text-2xl font-bold tracking-tight text-slate-900">Welcome</h1>

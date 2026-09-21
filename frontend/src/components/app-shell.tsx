@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileSpreadsheet, Inbox, ShieldCheck, Search, Bell } from "lucide-react";
+import { FileSpreadsheet, Inbox, ShieldCheck } from "lucide-react";
 import type { CurrentUser } from "@/lib/session";
 
 function initialsOf(user: CurrentUser) {
@@ -28,7 +28,7 @@ export function AppShell({ user, children }: { user: CurrentUser | null; childre
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500 text-white shadow-sm">
             <FileSpreadsheet className="h-4 w-4" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-slate-900">Averis</span>
+          <span className="text-lg font-bold tracking-tight text-slate-900">MailScan</span>
         </div>
 
         <nav className="mt-4 flex-1 space-y-1 px-3">
@@ -83,22 +83,7 @@ export function AppShell({ user, children }: { user: CurrentUser | null; childre
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search documents..."
-                className="h-9 w-64 rounded-lg border border-slate-200 bg-slate-50/50 pl-9 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:border-red-500 focus:bg-white focus:outline-none"
-              />
-            </div>
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-              aria-label="Notifications"
-            >
-              <Bell className="h-4 w-4" />
-            </button>
-            <div className="flex items-center gap-3 border-l border-slate-200 pl-3">
+            <div className="flex items-center gap-3">
               {user ? (
                 <>
                   <div
