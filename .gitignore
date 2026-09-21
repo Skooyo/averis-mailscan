@@ -6,3 +6,4 @@ credentials.json
 __pycache__/
 .pytest_cache/
 output/
+.DS_Store
