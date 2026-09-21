@@ -63,6 +63,65 @@ def get_results_collection(uri: Optional[str] = None, db_name: Optional[str] = N
     return client[db_name][RESULTS_COLLECTION]
 
 
+def get_result(
+    owner: str,
+    email_id: str,
+    *,
+    collection: Optional[Collection] = None,
+    uri: Optional[str] = None,
+    db_name: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Fetch one Result document by its (owner, email_id) key, or None if it
+    doesn't exist yet. The read counterpart to upsert_results -- previously
+    missing entirely, which is what blocked backend/review.py's retry/
+    correction primitives from having any CLI/API surface (they need to look
+    up an email's current state before mutating it).
+
+    `collection` lets a caller (or a test) supply the collection directly,
+    same seam upsert_results uses to avoid a live database in tests.
+    """
+    owns_client = collection is None
+    client: Optional[MongoClient] = None
+    if collection is None:
+        client = get_client(uri)
+        collection = client[db_name or os.environ.get("MONGODB_DB", "jobhunters")][RESULTS_COLLECTION]
+
+    try:
+        return collection.find_one({"owner": owner, "email_id": email_id})
+    finally:
+        if owns_client and client is not None:
+            client.close()
+
+
+def _load_existing_corrections(
+    collection: Collection, owner: str, email_ids: Any
+) -> Dict[str, list]:
+    """Fetch `corrections` already recorded against these (owner, email_id)
+    documents, keyed by email_id -- only for ids that actually have at least
+    one correction, so a plain pipeline rerun that never touches a corrected
+    email stays a single cheap query with an empty result.
+
+    This exists so upsert_results can re-apply a human's earlier correction
+    on top of a freshly (re)computed record instead of silently overwriting
+    it -- see upsert_results' docstring for the failure this prevents.
+    """
+    ids = list(email_ids)
+    if not ids:
+        return {}
+    from .review import Correction  # local import: keeps corrections-replay logic in review.py, not duplicated here
+
+    cursor = collection.find(
+        {"owner": owner, "email_id": {"$in": ids}, "corrections": {"$exists": True, "$ne": []}},
+        {"email_id": 1, "corrections": 1},
+    )
+    out: Dict[str, list] = {}
+    for doc in cursor:
+        raw = doc.get("corrections") or []
+        if raw:
+            out[doc["email_id"]] = [Correction.model_validate(c) for c in raw]
+    return out
+
+
 def _reshape_document(record: Dict[str, Any]) -> Dict[str, Any]:
     """Adapt one pipeline result record to the shape actually written to Mongo.
 
@@ -109,6 +168,24 @@ def upsert_results(
     (e.g. `retried: true`, or a mismatch's `details`) can't survive into a
     rerun whose new record no longer carries it -- see _OPTIONAL_KEYS.
 
+    Before writing, re-applies any corrections already recorded against an
+    email_id's *existing* Mongo document (see _load_existing_corrections).
+    Without this, a human correction/resolution -- however it got written,
+    CLI or a frontend route -- is only as durable as the next unrelated
+    pipeline rerun: process_comparison_requests recomputes each email from
+    scratch and knows nothing about a prior human action, so a plain
+    `--write-db` rerun would otherwise silently replace a corrected,
+    resolved document with a fresh, uncorrected one. Re-applying here (via
+    backend/review.py::apply_corrections, the same tested logic a CLI/API
+    would call directly) means a correction survives any number of later
+    reruns regardless of which one actually made it, not just the run that
+    happened to include the correction step. This does NOT re-evaluate
+    whether the fresh run's own escalation.required/reasons should change --
+    those still reflect this run's own findings; only the historical
+    correction's effects (corrections[], escalation.resolved/resolved_by/
+    resolution_note) are replayed on top, same as apply_corrections always
+    does when called directly.
+
     `collection` lets a caller (or a test) supply the collection directly,
     bypassing get_client/get_results_collection entirely -- the seam the
     tests in tests/test_db.py mock against, so they need no live database
@@ -127,9 +204,18 @@ def upsert_results(
         collection = client[db_name or os.environ.get("MONGODB_DB", "jobhunters")][RESULTS_COLLECTION]
 
     try:
+        existing_corrections = _load_existing_corrections(collection, owner, results.keys())
+
         processed_at = datetime.now(timezone.utc)
         operations = []
         for email_id, record in results.items():
+            record = dict(record)
+            corrections = existing_corrections.get(email_id)
+            if corrections:
+                from .review import apply_corrections  # local import: same reason as Correction above
+
+                apply_corrections({email_id: record}, {email_id: corrections})
+
             doc = _reshape_document(record)
             doc.update(owner=owner, email_id=email_id, processed_at=processed_at)
             update: Dict[str, Any] = {"$set": doc}

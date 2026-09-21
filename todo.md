@@ -285,24 +285,45 @@ Mongo-only). See the updated §6/§9 notes below._
     historical record of what was originally wrong.
   - `mark_resolved(...)` for the "human looked at it, it's fine as-is, no
     value needs changing" case.
-  - **Still open**: no CLI or API surface calls these yet.
-    **Correction, 2026-09-22 (sixth pass): this is no longer blocked on
-    `sample_submission.json`.** That reasoning (needing a persisted
-    `email_id -> result` store whose shape follows the submission schema)
-    predates the Mongo integration — `backend/db.py`'s `results`
-    collection *is* that persisted store now, and `Result`'s schema
-    already carries `corrections[]`/`escalation.resolved`/`resolved_by`/
-    `resolution_note` independent of the hackathon output format. What's
-    actually still needed: (1) a "fetch one result by `email_id`" function
-    in `backend/db.py` (only `upsert_results()` exists today — nothing
-    reads a single doc back out); (2) a decision on the surface itself —
-    a Python-only CLI (`python -m backend.review retry/correct <email_id>
-    ...`, reads/writes Mongo directly, keeps HANDOVER's "frontend and
-    backend never call each other directly" design intact) vs. exposing
-    this from the `/review` UI, which is more valuable to a judge but
-    means either porting `retry_email`'s logic to TypeScript or bridging
-    across the Mongo-only boundary for the first time. Not decided yet —
-    flag to whoever picks this up.
+  - [x] **Correction/resolve now have a real surface, eighth pass,
+    2026-09-22.** `backend/db.py::get_result(owner, email_id)` (the
+    missing "fetch one result back out" function) is in, and
+    `upsert_results` now re-applies any correction already recorded
+    against an email_id's existing Mongo document before writing —
+    otherwise a later, unrelated `--write-db` rerun would silently
+    overwrite a corrected/resolved result with a fresh, uncorrected one
+    (see `upsert_results`'s docstring; regression-tested in
+    `tests/test_db.py`). On the frontend,
+    `frontend/src/lib/review-actions.ts` ports `apply_corrections()`/
+    `mark_resolved()` straight to TypeScript, writing directly to Mongo —
+    safe to do because both are pure document edits (no LLM calls, no
+    file access). Wired to two new routes
+    (`POST /api/review/[emailId]/correct`, `.../resolve`) and real buttons
+    on `/comparison/[emailId]`: an inline "Correct" form per mismatched
+    field, and "Mark Resolved" on the escalation panel.
+  - [ ] **`retry_email`/`retry_and_reannotate` are still NOT wired to
+    anything — deliberately left incomplete this pass.** Unlike
+    correction/resolve, retry re-runs real extraction (LLM calls) against
+    the *original attachment file* — and this Vercel-hosted frontend has
+    no access to `attachments/` at all (it lives at the repo root, outside
+    `frontend/`'s deploy root). Porting retry to the UI the way
+    correction/resolve were ported isn't just more code, it needs solving
+    file access first. The UI now has a visibly disabled "Retry" button on
+    `/comparison/[emailId]` explaining this, rather than silently missing.
+    Concrete steps to actually finish it (see `backend/review.py`'s retry
+    section for the same list in code):
+    1. A `python -m backend.review retry <email_id> [--owner OWNER]` CLI
+       entrypoint: `db.get_result` the current record, `ingest.load_email`
+       to rebuild the `Email`, `await retry_and_reannotate(...)`,
+       `db.upsert_results` the result back. This alone unblocks retry
+       today, no frontend change needed.
+    2. Only if a frontend button is wanted later: stand up a small Python
+       HTTP service wrapping this module + `db.py`, have a Next.js API
+       route proxy to it — **and separately solve attachment file
+       access** (blob storage the service can reach, or run it on the
+       same machine/volume as the pipeline). Don't build the HTTP bridge
+       before solving file access; the call would succeed right up until
+       it tries to re-read a PDF that isn't there.
 
 ## 7. End-to-end pipeline
 
@@ -486,24 +507,27 @@ Mongo-only). See the updated §6/§9 notes below._
   - [x] BL value — same caveat as SI value above.
   - [x] Escalation reason — full `reasons[]` array (code + detail), not
         just one, on both `/review` and `/comparison/[emailId]`.
-- [ ] Add retry and human-review actions — **still not built**, see §6's
-      updated "Still open" note (2026-09-22, sixth pass) for the corrected
-      blocker: not `sample_submission.json` anymore, just (1) a
-      `backend/db.py` function to read one `Result` back by `email_id`,
-      which doesn't exist yet, and (2) an undecided call on whether this
-      is a Python CLI or a frontend-triggered mutation. The `Result`
-      schema was designed to represent a corrected/resolved state
-      (`corrections[]`, `escalation.resolved`/`resolved_by`/
-      `resolution_note`) so adding either surface later doesn't need a
-      schema change.
+- [x] Add correct/resolve human-review actions — **built, eighth pass,
+      2026-09-22**: `/api/review/[emailId]/correct` and `.../resolve`,
+      backed by `frontend/src/lib/review-actions.ts` (a TypeScript port of
+      `apply_corrections()`/`mark_resolved()`), wired to real buttons on
+      `/comparison/[emailId]`. See §6's updated note for the anti-clobber
+      fix (`backend/db.py::upsert_results` now re-applies existing
+      corrections on rerun) that this depended on being safe first.
+- [ ] Add a retry action — **still not built, deliberately.** Retry needs
+      real LLM calls and the original attachment file, neither reachable
+      from the Vercel-hosted frontend (see §6's updated note for the full
+      reasoning and the concrete steps to finish it). The UI has a visibly
+      disabled "Retry" button on `/comparison/[emailId]` rather than a
+      silently missing feature.
 
 _Read side code-complete and now live-verified on the write side: 5 real
 `Result` docs exist in Atlas (`email_001`-`005`, owner=`shared`) from a
 real `--write-db` pipeline run, confirmed in Compass. Not yet confirmed:
 that the frontend actually renders them — blocked on the missing
 `frontend/.env` noted above, and on the full 520-email run still being
-outstanding (§4). Write/mutation side (retry, correct, resolve from the
-UI) is still not built — deliberately deferred, see above._
+outstanding (§4). Correct/resolve from the UI are now built (see above);
+retry is deliberately still CLI-only-to-be-built, not wired to the UI._
 
 ## 10. Advanced document support
 

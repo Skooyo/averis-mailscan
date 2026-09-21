@@ -58,7 +58,7 @@ Granular checklist (kept current): `todo.md`.
 | Extraction | **done** (built + tested + live-verified), but only ever run in small batches — `data/extractions.json` has 3 real entries from live checks, not the full ~250 | `backend/extract.py` |
 | Comparison | **done** — deterministic normalizer + LLM fallback, both live-verified | `backend/comparison.py` |
 | Escalation | **done** — rules-based, no LLM calls, wired into every email's result | `backend/escalate.py` |
-| Retry / human correction | **library-level done**, no CLI/API surface yet (blocked on the submission schema below) | `backend/review.py` |
+| Retry / human correction | **correct/resolve done end-to-end** (real buttons on `/comparison/[emailId]`, backed by `frontend/src/lib/review-actions.ts` + `backend/db.py::get_result`/anti-clobber fix). **Retry still not wired to anything** — needs real LLM calls + the original attachment file, neither reachable from Vercel; see `backend/review.py`'s retry section for the concrete steps | `backend/review.py`, `backend/db.py`, `frontend/src/lib/review-actions.ts` |
 | OCR for scanned docs | **live-verified via the vision-LLM fallback** — all six `email_512`–`514_SI/BL.pdf` now convert to real transcribed text. Document AI itself is still **not** live-verified (this machine has no GCP Application Default Credentials); the vision-LLM path is what's actually carrying these six files today | `backend/ocr.py`, `backend/ocr_llm.py`, `backend/readers.py::_read_pdf` |
 | Corrupted-PDF repair | **done, fifth session** — `email_499_BL.pdf`'s broken xref table (bad `startxref` offset) is now auto-repaired via `pikepdf` before `pdfplumber` gives up; `email_511`/`515_BL.pdf` (missing trailer entirely) confirmed still unrecoverable | `backend/readers.py::_read_pdf`, new dependency `pikepdf` |
 | Output JSON + self-eval | **blocked** — `sample_submission.json` / `loader.py` / self-eval docker still not in the repo | — |
@@ -112,7 +112,9 @@ immediately.
 | `backend/comparison.py` | Deterministic SI-vs-BL comparator (no LLM calls in the default path) **plus** the LLM-fallback second-opinion checker. There is no separate `compare.py` — this file's own docstring header saying "backend/compare.py" is a stale leftover from a rename, harmless but worth fixing someday | `compare_documents()`, `compare_documents_with_fallback()`, `compare_jsons()`, `flatten_extraction()` |
 | `backend/pipeline.py` | Glue: `ingest → classify → identify SI/BL → dedupe → extract → compare → escalate`. Every email gets a result now, not just `comparison_request` ones | `run_pipeline()`, `compare_si_vs_bl()`, `process_comparison_requests()`, `dedupe_attachments()` |
 | `backend/escalate.py` | Rules-based escalation, no LLM calls. Reads classification confidence, attachment `read_error`s, the comparison result, and the extraction cache's per-field confidence; produces `{required, reasons: [{code, detail}], resolved, resolved_by, resolution_note}` per email | `evaluate_email()`, `annotate_with_escalation()`, `escalation_queue()` |
-| `backend/review.py` | The human side of escalation: retry a failed/stale email, or record a correction and have it resolve the mismatch. No CLI/API wired to these yet (see Plan below) | `retry_email()`, `retry_and_reannotate()`, `record_correction()`, `apply_corrections()`, `mark_resolved()` |
+| `backend/review.py` | The human side of escalation: retry a failed/stale email, or record a correction and have it resolve the mismatch. `apply_corrections()`/`mark_resolved()` are also ported directly to TypeScript in `frontend/src/lib/review-actions.ts` (pure document edits, safe to duplicate); `retry_email()`/`retry_and_reannotate()` have no CLI/API surface at all yet -- see the module's own retry-section comment and Plan item #4 below | `retry_email()`, `retry_and_reannotate()`, `record_correction()`, `apply_corrections()`, `mark_resolved()` |
+| `backend/db.py::get_result()` | Read counterpart to `upsert_results()` -- fetch one `Result` document by `(owner, email_id)`. Added so review actions (Python or TypeScript) can look up an email's current state before mutating it | `get_result()` |
+| `frontend/src/lib/review-actions.ts` | TypeScript port of `apply_corrections()`/`mark_resolved()`, writing directly to the Mongoose `Result` document. Deliberately does NOT port `retry_email()` -- see its own module comment for why | `correctField()`, `resolveEscalation()` |
 | `backend/ocr.py` | Document AI OCR fallback for scanned PDFs, generalized from the one-off `OCRApi.py` experiment. `readers.py::_read_pdf` calls it automatically when pdfplumber finds no text | `ocr_pdf()`, `OCRUnavailable` |
 | `backend/ocr_llm.py` | **New, fourth session.** Last-resort OCR fallback: only tried after `backend/ocr.py` is unavailable or itself fails. Renders each page to a PNG (pdfplumber's own `page.to_image()`) and asks a vision-capable Gateway model to transcribe it. Gated on `ENABLE_LLM_OCR_FALLBACK=1`, separate from `AI_GATEWAY_API_KEY` — see "Known issues" for why | `llm_ocr_pdf()`, `LLMOCRUnavailable` |
 | `backend/db.py` | Sync pymongo client that upserts `process_comparison_requests()`'s per-email results into MongoDB Atlas's `results` collection, keyed on `(owner, email_id)` — the same join key `frontend/src/models/Email.ts` uses on `(owner, id)`. `MONGODB_URI`/`MONGODB_DB` env vars, same names as `frontend/.env.example`. This is the **only** integration point between the Python backend and the Next.js frontend — see "MongoDB is the integration boundary" below | `get_client()`, `upsert_results()` |
@@ -214,31 +216,40 @@ Once #1 unblocks the schema: fold classify+compare+escalate output into
 that shape, call `/submit` or `inbox.submit(...)`, iterate on the score.
 
 **4. Build a CLI/API surface for `backend/review.py`.**
-The retry/correction primitives (`retry_email`, `record_correction`,
-`apply_corrections`, `mark_resolved`) exist and are tested, but nothing
-calls them yet. **This is no longer blocked on #1** (corrected
-2026-09-22, fourth session — see "Known issues" for the full reasoning):
-`backend/db.py`'s MongoDB `results` collection is already the persisted
-`email_id -> result` store this item was waiting on. What's actually
-needed:
-- A `backend/db.py` function to fetch one `Result` document by
-  `(owner, email_id)` — today the module only has `upsert_results()`, no
-  read path back out.
-- A decision on the surface: a **Python CLI** (e.g.
-  `python -m backend.review retry <email_id>` /
-  `correct <email_id> <field> <value>`) that reads/writes Mongo directly
-  and keeps the "frontend and backend never call each other directly"
-  design (see "MongoDB is the integration boundary" above) fully intact —
-  vs. exposing retry/correct as an action in the `/review` UI itself,
-  which is more visible to a judge but is a bigger lift: `record_correction`
-  /`apply_corrections`/`mark_resolved` are pure data mutations and could
-  plausibly be reimplemented directly against Mongo from a Next.js API
-  route without touching Python at all, but `retry_email` re-runs
-  extraction, which means real LLM calls — that has to happen in Python,
-  so triggering it from the frontend means either shelling out to the
-  Python pipeline from a Next.js API route or standing up a small HTTP
-  bridge, both of which are new territory this project doesn't have yet.
-  Not decided — flag to whoever picks this up next.
+**Half of this is done, eighth session (2026-09-22):** correct/resolve
+now have a real surface.
+`backend/db.py::get_result(owner, email_id)` (the missing read path back
+out of Mongo) is in; `upsert_results` now re-applies any correction
+already recorded against an email_id's existing document before writing,
+so a later pipeline rerun can't silently clobber a human's correction
+(see its docstring); and `frontend/src/lib/review-actions.ts` ports
+`apply_corrections()`/`mark_resolved()` straight to TypeScript, writing
+directly to Mongo — real buttons now live on `/comparison/[emailId]`
+(inline "Correct" per mismatched field, "Mark Resolved" on the escalation
+panel). This was the easy half: both are pure document edits, no LLM
+calls, no file access, so duplicating the logic in TypeScript was safe
+and didn't need the CLI-vs-frontend decision at all.
+
+**`retry_email`/`retry_and_reannotate` are still not wired to anything —
+deliberately.** Unlike correction/resolve, retry re-runs real extraction
+(LLM calls) against the *original attachment file* — and the
+Vercel-hosted frontend has no access to `attachments/` at all (it lives
+at the repo root, outside `frontend/`'s deploy root, so even a perfect
+TypeScript port would have nothing to read). `/comparison/[emailId]` now
+shows a visibly disabled "Retry" button explaining this, instead of the
+feature silently not existing. To actually finish it:
+- A `python -m backend.review retry <email_id> [--owner OWNER]` CLI
+  entrypoint (`db.get_result` the current record, `ingest.load_email` to
+  rebuild the `Email`, `await retry_and_reannotate(...)`,
+  `db.upsert_results` the result back) — unblocks retry today, no
+  frontend change needed. This is the realistic next step.
+- Only if a frontend button is wanted later: stand up a small Python HTTP
+  service wrapping `backend/review.py` + `backend/db.py`, have a Next.js
+  API route proxy to it — and **solve attachment file access first**
+  (blob storage the service can reach, or running it on the same
+  machine/volume as the pipeline). Building the HTTP bridge before
+  solving file access just moves the failure from "no route" to "PDF not
+  found" without fixing anything.
 
 **5. Connect the frontend to real backend data — done for reads, still
 needs a real data run.**

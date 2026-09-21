@@ -83,6 +83,34 @@ def test_get_results_collection_honors_mongodb_db_env(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# get_result
+# ---------------------------------------------------------------------------
+
+def test_get_result_returns_the_matching_document():
+    collection = MagicMock()
+    collection.find_one.return_value = {"owner": "shared", "email_id": "email_001", "status": "match"}
+
+    doc = db.get_result("shared", "email_001", collection=collection)
+
+    assert doc == {"owner": "shared", "email_id": "email_001", "status": "match"}
+    collection.find_one.assert_called_once_with({"owner": "shared", "email_id": "email_001"})
+
+
+def test_get_result_returns_none_when_not_found():
+    collection = MagicMock()
+    collection.find_one.return_value = None
+
+    assert db.get_result("shared", "email_999", collection=collection) is None
+
+
+def test_get_result_with_explicit_collection_never_touches_mongoclient(monkeypatch):
+    monkeypatch.setattr(db, "MongoClient", MagicMock(side_effect=AssertionError("should not connect")))
+    collection = MagicMock()
+    collection.find_one.return_value = None
+    assert db.get_result("shared", "email_001", collection=collection) is None
+
+
+# ---------------------------------------------------------------------------
 # upsert_results
 # ---------------------------------------------------------------------------
 
@@ -94,6 +122,7 @@ def test_upsert_results_empty_dict_is_a_noop_and_opens_no_connection(monkeypatch
 
 def test_upsert_results_writes_one_upsert_per_email_keyed_on_owner_and_email_id():
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=2, modified_count=0)
 
     results = {
@@ -125,6 +154,7 @@ def test_upsert_results_writes_one_upsert_per_email_keyed_on_owner_and_email_id(
 
 def test_upsert_results_stamps_processed_at():
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
 
     db.upsert_results("shared", {"email_001": {"status": "match"}}, collection=collection)
@@ -135,6 +165,7 @@ def test_upsert_results_stamps_processed_at():
 
 def test_upsert_results_uses_unordered_bulk_write_so_one_bad_doc_doesnt_block_the_rest():
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
 
     db.upsert_results("shared", {"email_001": {"status": "match"}}, collection=collection)
@@ -145,6 +176,7 @@ def test_upsert_results_uses_unordered_bulk_write_so_one_bad_doc_doesnt_block_th
 
 def test_upsert_results_returns_upserted_plus_modified_count():
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=3)
 
     n = db.upsert_results("shared", {"e1": {"status": "match"}, "e2": {"status": "match"}}, collection=collection)
@@ -155,6 +187,7 @@ def test_upsert_results_returns_upserted_plus_modified_count():
 def test_upsert_results_with_explicit_collection_never_touches_mongoclient(monkeypatch):
     monkeypatch.setattr(db, "MongoClient", MagicMock(side_effect=AssertionError("should not connect")))
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
     db.upsert_results("shared", {"email_001": {"status": "match"}}, collection=collection)
     collection.bulk_write.assert_called_once()
@@ -166,6 +199,7 @@ def test_upsert_results_reshapes_duplicate_attachments_dict_into_kept_dropped_ar
     this must land in Mongo as an array of {kept, dropped} subdocuments instead (see
     _reshape_document, frontend/src/models/Result.ts)."""
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
 
     results = {
@@ -187,6 +221,7 @@ def test_upsert_results_unsets_optional_keys_missing_from_the_new_record():
     silently survive a later run whose record no longer carries it (e.g. a rerun that now errors
     out instead of mismatching shouldn't keep showing the old mismatch's `details`)."""
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
 
     db.upsert_results("shared", {"email_001": {"status": "error", "message": "boom"}}, collection=collection)
@@ -198,6 +233,7 @@ def test_upsert_results_unsets_optional_keys_missing_from_the_new_record():
 
 def test_upsert_results_does_not_unset_optional_keys_present_in_the_new_record():
     collection = MagicMock()
+    collection.find.return_value = []
     collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
 
     db.upsert_results(
@@ -209,6 +245,92 @@ def test_upsert_results_does_not_unset_optional_keys_present_in_the_new_record()
     op = collection.bulk_write.call_args[0][0][0]
     assert op._doc["$unset"] == {"duplicate_attachments": "", "corrections": ""}
     assert op._doc["$set"]["retried"] is True
+
+
+# ---------------------------------------------------------------------------
+# upsert_results reapplying existing corrections (the anti-clobber fix)
+# ---------------------------------------------------------------------------
+
+def test_upsert_results_reapplies_an_existing_correction_so_a_rerun_does_not_clobber_it():
+    """The regression test for the bug this fix closes: a human corrected email_001's `consignee`
+    field (recorded in its Mongo document's `corrections` array by an earlier write). A later,
+    unrelated pipeline rerun recomputes email_001 from scratch and -- not knowing a human ever
+    touched it -- flags `consignee` as a mismatch again, exactly as before the correction. Without
+    re-applying the existing correction, this rerun would silently overwrite the corrected, resolved
+    document with a fresh, uncorrected one."""
+    existing_doc = {
+        "email_id": "email_001",
+        "corrections": [
+            {
+                "email_id": "email_001",
+                "field": "consignee",
+                "value": "Acme Corp",
+                "note": "checked the original SI",
+                "corrected_by": "reviewer@example.com",
+                "corrected_at": "2026-09-01T00:00:00+00:00",
+            }
+        ],
+    }
+    collection = MagicMock()
+    collection.find.return_value = [existing_doc]
+    collection.bulk_write.return_value = MagicMock(upserted_count=0, modified_count=1)
+
+    fresh_record = {
+        "status": "mismatch",
+        "category": "comparison_request",
+        "incorrect_or_missing": ["consignee"],
+        "details": {"consignee": {"si": "Acme Corp", "bl": "Other Corp"}},
+        "escalation": {"required": True, "reasons": [{"code": "mismatch", "detail": "consignee differs"}]},
+    }
+    db.upsert_results("shared", {"email_001": fresh_record}, collection=collection)
+
+    # The lookup only asks about this run's own email_ids, scoped to docs that actually have a
+    # correction recorded.
+    query, _projection = collection.find.call_args[0]
+    assert query["owner"] == "shared"
+    assert query["email_id"] == {"$in": ["email_001"]}
+
+    written = collection.bulk_write.call_args[0][0][0]._doc["$set"]
+
+    # The correction survives the rerun: the field it addressed is resolved again...
+    assert written["status"] == "match"
+    assert written["incorrect_or_missing"] == []
+    assert "consignee" not in written.get("details", {})
+    # ...the audit trail is preserved...
+    assert len(written["corrections"]) == 1
+    assert written["corrections"][0]["field"] == "consignee"
+    # ...and the escalation is marked resolved again, not left showing "needs review". The fresh
+    # run's own required/reasons are untouched -- only resolved/resolved_by are replayed.
+    assert written["escalation"]["required"] is True
+    assert written["escalation"]["resolved"] is True
+    assert written["escalation"]["resolved_by"] == "reviewer@example.com"
+
+
+def test_upsert_results_does_not_reapply_anything_when_no_existing_doc_has_corrections():
+    collection = MagicMock()
+    collection.find.return_value = []
+    collection.bulk_write.return_value = MagicMock(upserted_count=1, modified_count=0)
+
+    db.upsert_results("shared", {"email_001": {"status": "match"}}, collection=collection)
+
+    op = collection.bulk_write.call_args[0][0][0]
+    assert "corrections" not in op._doc["$set"]
+
+
+def test_upsert_results_only_queries_existing_corrections_once_per_call_for_a_multi_email_batch():
+    collection = MagicMock()
+    collection.find.return_value = []
+    collection.bulk_write.return_value = MagicMock(upserted_count=2, modified_count=0)
+
+    db.upsert_results(
+        "shared",
+        {"email_001": {"status": "match"}, "email_002": {"status": "match"}},
+        collection=collection,
+    )
+
+    collection.find.assert_called_once()
+    query, _projection = collection.find.call_args[0]
+    assert query["email_id"] == {"$in": ["email_001", "email_002"]}
 
 
 # ---------------------------------------------------------------------------

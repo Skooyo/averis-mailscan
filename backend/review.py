@@ -8,11 +8,24 @@ override reflected in the result. backend/escalate.py itself stays
 read-only (pure rules over the pipeline's own output); this module is
 where a human's action on an escalation gets recorded and applied.
 
-There's deliberately no CLI/API surface here yet -- that needs a
-persisted results store (email_id -> result), which doesn't exist until
-the submission JSON schema is confirmed (todo.md's blocking item #2, still
-waiting on sample_submission.json). These are the primitives a review UI
-or CLI would call once that store exists.
+Correction/resolve now HAVE a real surface: `backend/db.py::get_result` (the
+persisted `(owner, email_id) -> Result` read this module always needed) is
+in, `upsert_results` re-applies existing corrections on top of any later
+rerun (see its docstring), and frontend/src/lib/review-actions.ts is a
+TypeScript port of apply_corrections()/mark_resolved() writing directly to
+Mongo -- wired to real buttons on /comparison/[emailId] (correct a
+mismatched field inline, mark an escalation resolved). Porting those two
+was safe: they're pure document edits, no LLM calls, no file access.
+
+retry_email()/retry_and_reannotate() below are still NOT wired to
+anything -- no CLI, no API route, nothing calls them outside tests. This
+is deliberate, not an oversight: unlike correction/resolve, retry needs
+(a) real LLM calls (extraction) and (b) the original attachment file on
+disk, and the Vercel-hosted frontend has neither -- attachments/ lives at
+the repo root, outside frontend/'s deploy root, so a Next.js API route has
+no file to re-extract from even if it could run Python. See each
+function's own docstring below for exactly what's still needed to finish
+this, and todo.md/HANDOVER.md for the fuller writeup.
 """
 
 from __future__ import annotations
@@ -147,6 +160,24 @@ def mark_resolved(
 
 
 # --- retry --------------------------------------------------------------
+#
+# INCOMPLETE -- library-level only, nothing calls this outside tests/test_review.py.
+# To actually finish this (CLI is the realistic option; see backend/review.py's
+# module docstring for why a frontend button is a much bigger lift):
+#   1. Add a `python -m backend.review retry <email_id> [--owner OWNER]` entrypoint
+#      (argparse, same style as backend/pipeline.py::main) that:
+#        a. db.get_result(owner, email_id) to find the email's current stored result
+#        b. ingest.load_email(...) to rebuild the Email object retry_email() needs
+#           (classification comes from data/classifications.json)
+#        c. await retry_and_reannotate(email, classification, {email_id: existing_record})
+#        d. db.upsert_results(owner, {email_id: updated_record})
+#   2. If a frontend button is wanted later instead of/in addition to the CLI: stand
+#      up a small Python HTTP service wrapping this module + db.py (FastAPI/Flask is
+#      fine), have a Next.js API route proxy to it, AND solve attachment file access
+#      first (upload attachments/ to blob storage reachable from wherever that service
+#      runs, or run the service on the same machine/volume as the pipeline). Don't
+#      attempt this without solving file access first -- the retry call will succeed
+#      up to the point it tries to re-read a PDF that isn't there.
 
 
 async def retry_email(

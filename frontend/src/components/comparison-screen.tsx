@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -12,6 +13,8 @@ import {
   AlertTriangle,
   FileText,
   Save,
+  Pencil,
+  X,
 } from "lucide-react";
 import { RelativeTime } from "@/components/relative-time";
 import type { ResultView } from "@/types/averis";
@@ -51,16 +54,75 @@ const STATUS_TONE: Record<ResultView["status"], string> = {
 };
 
 export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenProps) {
-  // Local-only scratch note -- there's no persisted correction/notes endpoint yet (see
-  // backend/review.py's own doc comment: the CLI/API surface for corrections is deliberately not
-  // built until a reviewer needs to look one up by a persisted store, which this page now is the
-  // beginning of). Kept as a demo affordance, same as before this page read real data.
+  const router = useRouter();
+
+  // Local-only scratch note -- there's no persisted notes endpoint (unlike field corrections and
+  // resolving, below, which do write to Mongo now). Kept as a demo affordance.
   const [notes, setNotes] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
 
   const handleSaveNote = () => {
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 2000);
+  };
+
+  // Which mismatched field's inline "Correct" form is open, if any.
+  const [correctingField, setCorrectingField] = useState<string | null>(null);
+  const [correctionValue, setCorrectionValue] = useState("");
+  const [correctionNote, setCorrectionNote] = useState("");
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const openCorrection = (field: string, currentBlValue: string | number | null) => {
+    setCorrectingField(field);
+    setCorrectionValue(currentBlValue != null ? String(currentBlValue) : "");
+    setCorrectionNote("");
+    setActionError(null);
+  };
+
+  const submitCorrection = async (field: string) => {
+    setActionPending(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/review/${encodeURIComponent(emailId)}/correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field, value: correctionValue, note: correctionNote || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setActionError(body?.error ?? "Correction failed");
+        return;
+      }
+      setCorrectingField(null);
+      router.refresh();
+    } catch {
+      setActionError("Correction failed");
+    } finally {
+      setActionPending(false);
+    }
+  };
+
+  const markResolved = async () => {
+    setActionPending(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/review/${encodeURIComponent(emailId)}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setActionError(body?.error ?? "Resolve failed");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setActionError("Resolve failed");
+    } finally {
+      setActionPending(false);
+    }
   };
 
   const reasons = result?.escalation.reasons ?? [];
@@ -156,35 +218,91 @@ export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenP
                         <th className="w-1/4 px-6 py-4">Field</th>
                         <th className="w-1/3 px-6 py-4">Shipping Instruction (SI)</th>
                         <th className="w-1/3 px-6 py-4">Bill of Lading (BL)</th>
-                        <th className="w-12 px-6 py-4 text-center">Status</th>
+                        <th className="w-16 px-6 py-4 text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {result.fields.map((f) => (
-                        <tr key={f.field} className="transition-colors hover:bg-slate-50/50">
-                          <td className="px-6 py-4 font-bold text-slate-600 uppercase">
-                            {FIELD_LABELS[f.field] ?? f.field}
-                          </td>
-                          <td className="px-6 py-4 font-mono text-slate-900">
-                            {f.match ? <span className="text-slate-400">matched</span> : (f.siValue ?? "—")}
-                          </td>
-                          <td className="px-6 py-4">
-                            {f.match ? (
-                              <span className="font-mono text-slate-400">matched</span>
-                            ) : (
-                              <span className="inline-block rounded bg-red-100 px-2 py-0.5 font-mono font-bold text-red-700">
-                                {f.blValue ?? "—"}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {f.match ? (
-                              <CheckCircle2 className="inline h-4 w-4 text-emerald-500" />
-                            ) : (
-                              <AlertCircle className="inline h-4 w-4 text-red-500" />
-                            )}
-                          </td>
-                        </tr>
+                        <Fragment key={f.field}>
+                          <tr className="transition-colors hover:bg-slate-50/50">
+                            <td className="px-6 py-4 font-bold text-slate-600 uppercase">
+                              {FIELD_LABELS[f.field] ?? f.field}
+                            </td>
+                            <td className="px-6 py-4 font-mono text-slate-900">
+                              {f.match ? <span className="text-slate-400">matched</span> : (f.siValue ?? "—")}
+                            </td>
+                            <td className="px-6 py-4">
+                              {f.match ? (
+                                <span className="font-mono text-slate-400">matched</span>
+                              ) : (
+                                <span className="inline-block rounded bg-red-100 px-2 py-0.5 font-mono font-bold text-red-700">
+                                  {f.blValue ?? "—"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-center gap-2">
+                                {f.match ? (
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                ) : (
+                                  <>
+                                    <AlertCircle className="h-4 w-4 text-red-500" />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        correctingField === f.field ? setCorrectingField(null) : openCorrection(f.field, f.blValue)
+                                      }
+                                      title="Correct this field"
+                                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                    >
+                                      {correctingField === f.field ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                          {correctingField === f.field && (
+                            <tr className="bg-slate-50/80">
+                              <td colSpan={4} className="px-6 py-4">
+                                <div className="flex flex-wrap items-end gap-3">
+                                  <label className="flex-1 min-w-[180px]">
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                      Correct value
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={correctionValue}
+                                      onChange={(e) => setCorrectionValue(e.target.value)}
+                                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-3 text-xs text-slate-900 focus:border-red-500 focus:outline-none"
+                                    />
+                                  </label>
+                                  <label className="flex-1 min-w-[180px]">
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                      Note (optional)
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={correctionNote}
+                                      onChange={(e) => setCorrectionNote(e.target.value)}
+                                      placeholder="e.g. checked the original SI"
+                                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-3 text-xs text-slate-900 focus:border-red-500 focus:outline-none"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    disabled={actionPending}
+                                    onClick={() => submitCorrection(f.field)}
+                                    className="h-9 shrink-0 rounded-lg bg-red-500 px-4 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-50"
+                                  >
+                                    {actionPending ? "Saving..." : "Save correction"}
+                                  </button>
+                                </div>
+                                {actionError && <p className="mt-2 text-xs font-semibold text-red-600">{actionError}</p>}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -298,6 +416,34 @@ export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenP
                           </li>
                         ))}
                       </ul>
+                      {!result.escalation.resolved && (
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={markResolved}
+                          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {actionPending ? "Saving..." : "Mark Resolved"}
+                        </button>
+                      )}
+                      {actionError && !correctingField && (
+                        <p className="mt-2 text-xs font-semibold text-red-600">{actionError}</p>
+                      )}
+                      {/* Not implemented -- retry re-runs extraction (real LLM calls) against the
+                          original attachment file, which this Vercel-hosted app has no access to.
+                          See backend/review.py's retry_email() docstring for what's needed to wire
+                          this up (a CLI today; a frontend button later needs a separate Python
+                          service plus solving file access). Correct/resolve above are safe to run
+                          from here because they're pure document edits. */}
+                      <button
+                        type="button"
+                        disabled
+                        title="Not implemented from this UI yet -- retry needs real extraction (LLM calls) against the original attachment file, which this frontend can't reach. Run python -m backend.review retry <email_id> instead (see backend/review.py)."
+                        className="mt-2 flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-2 text-xs font-bold text-slate-400"
+                      >
+                        Retry (not implemented -- use the CLI)
+                      </button>
                     </>
                   )}
                 </div>
