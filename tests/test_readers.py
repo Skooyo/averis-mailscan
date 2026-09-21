@@ -50,14 +50,15 @@ def test_read_txt_passes_explicit_utf8_encoding(tmp_path):
     assert calls[0].get("encoding") == "utf-8"
 
 
-def test_read_txt_replaces_invalid_bytes_instead_of_raising(tmp_path):
+def test_read_txt_raises_on_invalid_bytes(tmp_path):
+    # No errors="replace": genuinely malformed bytes must raise, so
+    # read_attachment's try/except can turn this into a real read_error
+    # instead of silently substituting "�" with no escalation signal.
     p = tmp_path / "bad_bytes.txt"
     p.write_bytes(b"Shipper: ACME\xff\xfeCorp")  # invalid UTF-8 sequence
 
-    text = _read_txt(p)  # must not raise
-
-    assert "Shipper: ACME" in text
-    assert "Corp" in text
+    with pytest.raises(UnicodeDecodeError):
+        _read_txt(p)
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +144,20 @@ def test_read_attachment_empty_document(tmp_path):
 
     assert text is None
     assert error == "empty_document"
+
+
+def test_read_attachment_escalates_invalid_bytes_instead_of_masking_them(tmp_path):
+    # End-to-end version of test_read_txt_raises_on_invalid_bytes: confirms the
+    # public entry point turns the raise into a proper read_error rather than
+    # either propagating it or (the old, now-removed behavior) silently
+    # replacing the bad bytes with "�" and reporting success.
+    p = tmp_path / "bad_bytes.txt"
+    p.write_bytes(b"Shipper: ACME\xff\xfeCorp")
+
+    text, error = read_attachment(p)
+
+    assert text is None
+    assert error is not None and error.startswith("UnicodeDecodeError")
 
 
 def test_read_attachment_never_raises_on_reader_exception(tmp_path, monkeypatch):

@@ -10,7 +10,10 @@ ReadResult = tuple[str | None, str | None]  # (text, read_error)
 
 
 def _read_txt(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
+    # No errors="replace": genuinely malformed bytes must raise (caught by
+    # read_attachment below and turned into a read_error) rather than silently
+    # becoming "�" placeholders with no escalation signal.
+    return path.read_text(encoding="utf-8")
 
 
 def _read_pdf(path: Path) -> str:
