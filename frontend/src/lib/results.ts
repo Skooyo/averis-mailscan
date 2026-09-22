@@ -68,13 +68,14 @@ function toFields(doc: LeanResult): ComparisonFieldResult[] {
   const incorrect = new Set(doc.incorrect_or_missing ?? []);
   const details = doc.details ?? {};
   return CANONICAL_FIELDS.map((field) => {
-    const match = !incorrect.has(field);
     const diff = details[field];
     return {
       field,
-      match,
-      siValue: match ? null : ((diff?.si as string | number | undefined) ?? null),
-      blValue: match ? null : ((diff?.bl as string | number | undefined) ?? null),
+      match: !incorrect.has(field),
+      // Present for every field on a Result written since compare_documents started recording
+      // matched values too; null for an older Result that only ever had the flagged fields.
+      siValue: (diff?.si as string | number | undefined) ?? null,
+      blValue: (diff?.bl as string | number | undefined) ?? null,
     };
   });
 }

@@ -217,7 +217,10 @@ def test_compare_documents_all_match_returns_no_mismatch_message():
     assert result.status == "match"
     assert result.message == NO_MISMATCH_MESSAGE
     assert result.incorrect_or_missing == []
-    assert result.details == {}
+    # Every field still gets a details entry (for the review table), even though none mismatched.
+    assert set(result.details) == set(si)
+    assert result.details["shipper"].si == si["shipper"]
+    assert result.details["shipper"].bl == bl["shipper"]
 
 
 def test_compare_documents_flags_real_mismatch():
@@ -231,6 +234,9 @@ def test_compare_documents_flags_real_mismatch():
     assert set(result.incorrect_or_missing) == {"port_of_discharge", "gross_weight_kg"}
     assert result.details["port_of_discharge"].si == "Port Klang"
     assert result.details["port_of_discharge"].bl == "Shanghai"
+    # An unflagged field still has its (matching) values recorded.
+    assert result.details["shipper"].si == si["shipper"]
+    assert result.details["shipper"].bl == bl["shipper"]
 
 
 def test_compare_documents_port_spelling_difference_does_not_false_flag_when_codes_match():
@@ -356,6 +362,9 @@ async def test_fallback_can_resolve_a_flagged_field(monkeypatch):
     result = await compare_documents_with_fallback(si, bl, use_llm_fallback=True)
     assert result["status"] == "match"
     assert result["message"] == NO_MISMATCH_MESSAGE
+    # The resolved field's SI/BL values are still in `details`, just no longer flagged.
+    assert result["details"]["notify_party"]["si"] == "same as consignee"
+    assert result["details"]["notify_party"]["bl"] == "As per consignee"
 
 
 @pytest.mark.asyncio

@@ -104,6 +104,18 @@ def test_missing_attachments_on_general_email_does_not_escalate():
     assert report.required is False
 
 
+def test_missing_attachments_on_new_si_request_does_not_escalate():
+    # A new_si_request normally has no attachments -- the shipment details are inline in the body
+    # (classify.py's own category definition). Regression test for a bug where every attachment-less
+    # new_si_request email (125/125 in the demo dataset) was wrongly escalated as missing_attachment.
+    email = _email("e1")
+    classification = _classification("new_si_request")
+
+    report = evaluate_email(email, classification, None)
+
+    assert not any(r.code == "missing_attachment" for r in report.reasons)
+
+
 def test_ambiguous_si_bl_error_gets_specific_code():
     email = _email("e1", _attachment("a.txt"))
     classification = _classification("comparison_request")

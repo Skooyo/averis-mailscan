@@ -360,6 +360,8 @@ class CompareResult(BaseModel):
     status: str  # "match" | "mismatch"
     message: str
     incorrect_or_missing: List[str] = Field(default_factory=list)
+    # Every one of `fields` gets an entry, matched or not -- a human reviewing the comparison
+    # needs to see what was actually read off each document, not just which ones disagreed.
     details: Dict[str, FieldDifference] = Field(default_factory=dict)
 
 
@@ -378,19 +380,18 @@ def compare_documents(
     for field_name in fields:
         si_value = si.get(field_name)
         bl_value = bl.get(field_name)
+        details[field_name] = FieldDifference(si=si_value, bl=bl_value)
 
         if si_value in (None, "") or bl_value in (None, ""):
             if si_value != bl_value:
                 incorrect_or_missing.append(field_name)
-                details[field_name] = FieldDifference(si=si_value, bl=bl_value)
             continue
 
         if not _fields_match(field_name, si_value, bl_value):
             incorrect_or_missing.append(field_name)
-            details[field_name] = FieldDifference(si=si_value, bl=bl_value)
 
     if not incorrect_or_missing:
-        return CompareResult(status="match", message=NO_MISMATCH_MESSAGE)
+        return CompareResult(status="match", message=NO_MISMATCH_MESSAGE, details=details)
 
     return CompareResult(
         status="mismatch",
@@ -515,10 +516,9 @@ async def compare_documents_with_fallback(
         {k: bl.get(k) for k in flagged},
     )
 
+    # A field the LLM resolves is no longer "mismatched", but its details entry stays -- `details`
+    # now carries every field's SI/BL value for the review table, whether or not it's flagged.
     still_mismatched = llm_result.get("incorrect_or_missing", flagged)
-    resolved = [f for f in flagged if f not in still_mismatched]
-    for f in resolved:
-        result.details.pop(f, None)
     result.incorrect_or_missing = still_mismatched
 
     if not result.incorrect_or_missing:

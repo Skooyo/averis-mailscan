@@ -8,7 +8,7 @@ import { unescapeNewlines } from "@/lib/text";
 import { Attachment } from "@/models/Attachment";
 import { Email } from "@/models/Email";
 import { User } from "@/models/User";
-import type { EmailCategory, EmailDetail, InboxEmail } from "@/types/averis";
+import type { AttachmentInfo, EmailCategory, EmailDetail, InboxEmail } from "@/types/averis";
 
 // Every read below is scoped with `visibleOwners(userEmail)`: the shared
 // dataset plus, when signed in, the user's own. Pass the email from
@@ -151,12 +151,13 @@ export async function getEmailDetail(docId: string, userEmail: string | null): P
  * emails collection _id -- for pages keyed on that id, like /comparison/[emailId] (that route
  * mirrors how the rest of the app already links to it: components/inbox-screen.tsx and
  * app/emails/[emailId]/page.tsx both use `email.id`, not the docId, in that link). Returns null if
- * no such id is visible to this user.
+ * no such id is visible to this user. Includes the email's SI/BL attachments (if any), for the
+ * comparison page's document preview.
  */
 export async function getEmailByBusinessId(
   id: string,
   userEmail: string | null,
-): Promise<{ subject: string | null; category: EmailCategory | null } | null> {
+): Promise<{ subject: string | null; category: EmailCategory | null; attachments: AttachmentInfo[] } | null> {
   await connectDB();
   const docs = await Email.find({ id, owner: { $in: visibleOwners(userEmail) } })
     .select("owner id subject category")
@@ -165,7 +166,22 @@ export async function getEmailByBusinessId(
   // Prefer the signed-in viewer's own email over the shared demo dataset's, in the unlikely event
   // both exist under the same id (ids aren't globally unique, only per owner).
   const doc = docs.find((d) => d.owner !== SHARED_OWNER) ?? docs[0];
-  return { subject: doc.subject ?? null, category: (doc.category as EmailCategory | null) ?? null };
+
+  // Same lookup as getEmailDetail: an email's attachments belong to the same (owner, id) key.
+  // Not lean(): a hydrated document gives a Buffer, so `.length` reports the real byte size.
+  const files = await Attachment.find({ user_email: doc.owner, email_id: doc.id }).sort({ doc_type: -1 });
+
+  return {
+    subject: doc.subject ?? null,
+    category: (doc.category as EmailCategory | null) ?? null,
+    attachments: files.map((f) => ({
+      id: String(f._id),
+      filename: f.filename,
+      docType: f.doc_type,
+      contentType: f.content_type,
+      size: f.attachment.length,
+    })),
+  };
 }
 
 /** The file for a download, or null if it doesn't exist or isn't visible to this user. */

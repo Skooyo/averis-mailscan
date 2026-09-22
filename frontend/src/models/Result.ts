@@ -88,10 +88,10 @@ const resultSchema = new Schema(
     // Only meaningful for a compared (match/mismatch) result -- `default: undefined` keeps these
     // absent rather than Mongoose's default empty array/object on every other status.
     incorrect_or_missing: { type: [String], default: undefined },
-    // field name -> {si, bl}, only for the fields compare_documents flagged. NOTE: matched fields
-    // are NOT represented anywhere in this document -- backend/comparison.py's CompareResult only
-    // ever records the fields it flagged, so a full 7-field SI/BL table (including the values of
-    // fields that matched) cannot be reconstructed from this alone. See frontend/src/lib/results.ts.
+    // field name -> {si, bl}, one entry per canonical field, matched or not (backend/comparison.py's
+    // compare_documents populates every field so a human reviewing a match can still see what was
+    // read off each document, not just that it agreed). A Result written before that change only
+    // has entries for the fields it flagged -- see frontend/src/lib/results.ts's toFields().
     details: { type: Map, of: fieldDifferenceSchema, default: undefined },
 
     // One entry per collapsed duplicate-attachment group. Only present when a duplicate was

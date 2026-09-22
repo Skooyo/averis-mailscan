@@ -16,12 +16,15 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import { AttachmentPane } from "@/components/attachment-pane";
 import { RelativeTime } from "@/components/relative-time";
-import type { ResultView } from "@/types/averis";
+import type { AttachmentInfo, ResultView } from "@/types/averis";
 
 interface ComparisonScreenProps {
   emailId: string;
   subject: string | null;
+  /** The email's SI/BL attachments, for the document preview panes below. */
+  attachments: AttachmentInfo[];
   /** null when the pipeline hasn't produced a Result for this email yet (see page.tsx). */
   result: ResultView | null;
 }
@@ -53,7 +56,7 @@ const STATUS_TONE: Record<ResultView["status"], string> = {
   unclassified: "bg-slate-100 text-slate-600",
 };
 
-export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenProps) {
+export function ComparisonScreen({ emailId, subject, attachments, result }: ComparisonScreenProps) {
   const router = useRouter();
 
   // Local-only scratch note -- there's no persisted notes endpoint (unlike field corrections and
@@ -128,6 +131,12 @@ export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenP
   const reasons = result?.escalation.reasons ?? [];
   const mismatches = result?.fields.filter((f) => !f.match) ?? [];
   const duplicateGroups = result?.duplicateAttachments ?? [];
+
+  const siAttachment = attachments.find((a) => a.docType === "SI") ?? null;
+  const blAttachment = attachments.find((a) => a.docType === "BL") ?? null;
+  // Shown whenever there's something to look at, and also for a comparison_request with a document
+  // genuinely missing (its pane then reads "No document attached" -- itself informative for review).
+  const showDocuments = attachments.length > 0 || result?.category === "comparison_request";
 
   return (
     <div className="space-y-6">
@@ -208,6 +217,13 @@ export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenP
             </div>
           )}
 
+          {showDocuments && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <AttachmentPane label="Shipping Instruction (SI)" attachment={siAttachment} />
+              <AttachmentPane label="Bill of Lading (BL)" attachment={blAttachment} />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="space-y-6 lg:col-span-7 xl:col-span-8">
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -229,11 +245,15 @@ export function ComparisonScreen({ emailId, subject, result }: ComparisonScreenP
                               {FIELD_LABELS[f.field] ?? f.field}
                             </td>
                             <td className="px-6 py-4 font-mono text-slate-900">
-                              {f.match ? <span className="text-slate-400">matched</span> : (f.siValue ?? "—")}
+                              {/* Real value when the Result has one; "Matched" only as a fallback for an
+                                  older Result written before compare_documents recorded matched values too. */}
+                              {f.siValue ?? (f.match ? <span className="text-slate-400">Matched</span> : "—")}
                             </td>
                             <td className="px-6 py-4">
                               {f.match ? (
-                                <span className="font-mono text-slate-400">matched</span>
+                                <span className="font-mono text-slate-900">
+                                  {f.blValue ?? <span className="text-slate-400">Matched</span>}
+                                </span>
                               ) : (
                                 <span className="inline-block rounded bg-red-100 px-2 py-0.5 font-mono font-bold text-red-700">
                                   {f.blValue ?? "—"}

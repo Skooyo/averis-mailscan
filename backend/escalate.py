@@ -23,10 +23,14 @@ from .models import Classification, Email
 DEFAULT_CLASSIFICATION_CONFIDENCE_FLOOR = 0.6
 DEFAULT_FIELD_CONFIDENCE_FLOOR = 0.5
 
-# Categories where a completely attachment-less email is itself suspicious
-# (comparison needs an SI+BL; new_si_request usually carries the inline/
-# attached SI details it's asking us to raise).
-_ATTACHMENT_EXPECTED_CATEGORIES = {"comparison_request", "new_si_request"}
+# Categories where a completely attachment-less email is itself suspicious: comparison needs an
+# SI+BL. new_si_request is deliberately NOT here -- per classify.py's own category definition, a
+# new_si_request normally carries its shipment details inline in the body, not as an attachment
+# ("even if it closes with revert with draft BL once available"), so having none is the expected
+# case, not a red flag. Including it here previously escalated every attachment-less new_si_request
+# email (125/125 in the demo dataset) into the review queue, each routed to a comparison screen
+# that would then say the category doesn't require SI/BL comparison at all.
+_ATTACHMENT_EXPECTED_CATEGORIES = {"comparison_request"}
 
 
 class EscalationReason(BaseModel):
@@ -59,7 +63,7 @@ def evaluate_email(
     Checks, in order:
     1. Missing classification, or classification confidence below floor.
     2. Any attachment with a read_error (missing/unreadable document).
-    3. A comparison_request/new_si_request email with no attachments at all.
+    3. A comparison_request email with no attachments at all.
     4. The comparison stage failed outright (process_comparison_requests
        caught an exception) -- specifically flags the "could not uniquely
        identify an SI and a BL" case as ambiguous_si_bl.

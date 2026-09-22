@@ -128,10 +128,10 @@ export interface EscalationInfo {
 
 /**
  * One of the 7 canonical fields (backend/comparison.py `FIELDS`), for a
- * match/mismatch result. backend/comparison.py's CompareResult only ever
- * records SI/BL *values* for a field it flagged as mismatched or missing --
- * a matched field is known only to have matched, its value isn't persisted
- * anywhere -- so `siValue`/`blValue` are null whenever `match` is true.
+ * match/mismatch result. backend/comparison.py's CompareResult records every
+ * field's SI/BL value, matched or not, so a human reviewing a match can still
+ * see what was read off each document. `siValue`/`blValue` are only null for
+ * a Result written before that change, or a field neither document had.
  */
 export interface ComparisonFieldResult {
   field: string;

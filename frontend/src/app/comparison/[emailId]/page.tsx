@@ -25,5 +25,12 @@ export default async function Page({ params }: { params: Promise<{ emailId: stri
   ]);
   if (!email && !result) notFound();
 
-  return <ComparisonScreen emailId={emailId} subject={email?.subject ?? null} result={result} />;
+  return (
+    <ComparisonScreen
+      emailId={emailId}
+      subject={email?.subject ?? null}
+      attachments={email?.attachments ?? []}
+      result={result}
+    />
+  );
 }
