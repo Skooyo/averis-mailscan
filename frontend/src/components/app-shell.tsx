@@ -14,8 +14,11 @@ function initialsOf(user: CurrentUser) {
 
 export function AppShell({ user, children }: { user: CurrentUser | null; children: React.ReactNode }) {
   const pathname = usePathname();
-  const isInboxActive = pathname === "/" || pathname.startsWith("/comparison");
-  const isReviewActive = pathname.startsWith("/review");
+  // A comparison page is reachable from both Inbox and Review, but it's fundamentally part of the
+  // review workflow (escalation, corrections, resolving) -- so it always highlights Review, never
+  // Inbox, regardless of which page you opened it from.
+  const isInboxActive = pathname === "/";
+  const isReviewActive = pathname.startsWith("/review") || pathname.startsWith("/comparison");
 
   // The login page is full-screen, without the sidebar and header.
   if (pathname === "/login") return <>{children}</>;

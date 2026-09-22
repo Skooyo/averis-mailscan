@@ -9042,5 +9042,157 @@
       "confidence": 0.0,
       "evidence": "GROSS WEIGHT: ____MT"
     }
+  },
+  "attachments/email_519_BL.txt": {
+    "doc_type_detected": "BL",
+    "shipper": {
+      "value": "ASIA PACIFIC PAPERBOARD TRADING PTE LTD",
+      "confidence": 1.0,
+      "evidence": "Shipper/Exporter: ASIA PACIFIC PAPERBOARD TRADING PTE LTD"
+    },
+    "consignee": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "Consignee: UAB NOVAKOPA"
+    },
+    "notify_party": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "Notify: UAB NOVAKOPA"
+    },
+    "port_of_loading": {
+      "value": "BUATAN, INDONESIA (IDBUA)",
+      "confidence": 1.0,
+      "evidence": "Load Port: BUATAN, INDONESIA (IDBUA)"
+    },
+    "port_of_discharge": {
+      "value": "BUSAN, SOUTH KOREA (KRPUS)",
+      "confidence": 1.0,
+      "evidence": "PORT OF DISCHARGE: BUSAN, SOUTH KOREA (KRPUS)"
+    },
+    "container_count": {
+      "value": "3",
+      "confidence": 1.0,
+      "evidence": "No. of Containers: 3 x 20'FCL"
+    },
+    "gross_weight_kg": {
+      "value": "70572",
+      "confidence": 1.0,
+      "evidence": "Gross Weight (KG): 70,572 KG"
+    }
+  },
+  "attachments/email_519_SI.txt": {
+    "doc_type_detected": "SI",
+    "shipper": {
+      "value": null,
+      "confidence": 0.0,
+      "evidence": null
+    },
+    "consignee": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "CONSIGNEE: UAB NOVAKOPA"
+    },
+    "notify_party": {
+      "value": "UAB NOVAKOPA",
+      "confidence": 1.0,
+      "evidence": "NOTIFY PARTY: UAB NOVAKOPA"
+    },
+    "port_of_loading": {
+      "value": "BUATAN, INDONESIA",
+      "confidence": 1.0,
+      "evidence": "PORT OF LOADING: BUATAN, INDONESIA"
+    },
+    "port_of_discharge": {
+      "value": "BUSAN, SOUTH KOREA",
+      "confidence": 1.0,
+      "evidence": "Discharge Port: BUSAN, SOUTH KOREA"
+    },
+    "container_count": {
+      "value": null,
+      "confidence": 0.0,
+      "evidence": null
+    },
+    "gross_weight_kg": {
+      "value": "70572",
+      "confidence": 1.0,
+      "evidence": "Gross Weight毛重(KGS): 70,572 KG"
+    }
+  },
+  "attachments/email_520_BL.txt": {
+    "doc_type_detected": "BL",
+    "shipper": {
+      "value": "APRIL FINE PAPER TRADING\nON BEHALF OF VITAL SOLUTIONS PTE LTD; 77 ROBINSON ROAD, #21-01; SINGAPORE 068896",
+      "confidence": 1.0,
+      "evidence": "Shipper: APRIL FINE PAPER TRADING\n  ON BEHALF OF VITAL SOLUTIONS PTE LTD; 77 ROBINSON ROAD, #21-01; SINGAPORE 068896"
+    },
+    "consignee": {
+      "value": "CLIFFORD PAPER INC\n70 EAST STREET; RIDGEFIELD, NJ 07657, USA",
+      "confidence": 1.0,
+      "evidence": "Consignee: CLIFFORD PAPER INC\n  70 EAST STREET; RIDGEFIELD, NJ 07657, USA"
+    },
+    "notify_party": {
+      "value": "CLIFFORD PAPER INC",
+      "confidence": 1.0,
+      "evidence": "Notify Party/Intermediate Consignee: CLIFFORD PAPER INC"
+    },
+    "port_of_loading": {
+      "value": "SINGAPORE (SGSIN)",
+      "confidence": 1.0,
+      "evidence": "Port of Loading (POL): SINGAPORE (SGSIN)"
+    },
+    "port_of_discharge": {
+      "value": "PYEONGTAEK, SOUTH KOREA (KRPTK)",
+      "confidence": 1.0,
+      "evidence": "Port of Discharge: PYEONGTAEK, SOUTH KOREA (KRPTK)"
+    },
+    "container_count": {
+      "value": "6",
+      "confidence": 1.0,
+      "evidence": "No. of Containers or Packages: 6 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "122640",
+      "confidence": 1.0,
+      "evidence": "Gross Weight (KG): 122,640 KG"
+    }
+  },
+  "attachments/email_520_SI.txt": {
+    "doc_type_detected": "SI",
+    "shipper": {
+      "value": "APRIL FINE PAPER TRADING",
+      "confidence": 1.0,
+      "evidence": "Shipper/Exporter: APRIL FINE PAPER TRADING"
+    },
+    "consignee": {
+      "value": null,
+      "confidence": 0.0,
+      "evidence": "CONSIGNEE: "
+    },
+    "notify_party": {
+      "value": "CLIFFORD PAPER INC",
+      "confidence": 1.0,
+      "evidence": "Notify: CLIFFORD PAPER INC"
+    },
+    "port_of_loading": {
+      "value": "SINGAPORE",
+      "confidence": 1.0,
+      "evidence": "POL: SINGAPORE"
+    },
+    "port_of_discharge": {
+      "value": "PYEONGTAEK, SOUTH KOREA",
+      "confidence": 1.0,
+      "evidence": "POD: PYEONGTAEK, SOUTH KOREA"
+    },
+    "container_count": {
+      "value": "6",
+      "confidence": 1.0,
+      "evidence": "No. of Containers: 6 x 40'HC"
+    },
+    "gross_weight_kg": {
+      "value": "122640",
+      "confidence": 1.0,
+      "evidence": "Gross Wt (kgs): 122,640 KG"
+    }
   }
 }

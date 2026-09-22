@@ -170,14 +170,21 @@ export interface ResultView {
   processedAt: string; // ISO 8601
 }
 
-/** One row of the review queue: an escalated email, joined with its Email for display. */
-export interface EscalationQueueItem {
+/**
+ * One row of the review queue: any comparison_request email that has gone through comparison
+ * (status match/mismatch/error), joined with its Email for display -- not only the escalated ones.
+ * `required`/`resolved` still say whether backend/escalate.py flagged it and whether a human has
+ * acted on that, but a clean match with nothing flagged shows up here too, with `required: false`.
+ */
+export interface ReviewItem {
   emailId: string;
   category: EmailCategory | null;
   status: ResultStatus;
+  message: string; // e.g. "No mismatch detected" or "2 field(s) mismatched: consignee, container_count"
   subject: string | null;
   from: string | null;
   reasons: EscalationReasonInfo[];
+  required: boolean;
   resolved: boolean;
   processedAt: string; // ISO 8601
 }

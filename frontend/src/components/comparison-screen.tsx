@@ -2,7 +2,6 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   ChevronLeft,
   Clock,
@@ -58,6 +57,14 @@ const STATUS_TONE: Record<ResultView["status"], string> = {
 
 export function ComparisonScreen({ emailId, subject, attachments, result }: ComparisonScreenProps) {
   const router = useRouter();
+
+  // Wherever this page was opened from (the review queue or the inbox), Back should return there,
+  // not always to the inbox. Browser history already knows that; a hardcoded link to "/" didn't.
+  // Falls back to the inbox only if this page has no real in-app history (e.g. opened directly).
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/");
+  };
 
   // Local-only scratch note -- there's no persisted notes endpoint (unlike field corrections and
   // resolving, below, which do write to Mongo now). Kept as a demo affordance.
@@ -144,12 +151,14 @@ export function ComparisonScreen({ emailId, subject, attachments, result }: Comp
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Back"
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             >
               <ChevronLeft className="h-4 w-4" />
-            </Link>
+            </button>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Comparison Detail: {subject || emailId}
             </h1>
@@ -450,20 +459,6 @@ export function ComparisonScreen({ emailId, subject, attachments, result }: Comp
                       {actionError && !correctingField && (
                         <p className="mt-2 text-xs font-semibold text-red-600">{actionError}</p>
                       )}
-                      {/* Not implemented -- retry re-runs extraction (real LLM calls) against the
-                          original attachment file, which this Vercel-hosted app has no access to.
-                          See backend/review.py's retry_email() docstring for what's needed to wire
-                          this up (a CLI today; a frontend button later needs a separate Python
-                          service plus solving file access). Correct/resolve above are safe to run
-                          from here because they're pure document edits. */}
-                      <button
-                        type="button"
-                        disabled
-                        title="Not implemented from this UI yet -- retry needs real extraction (LLM calls) against the original attachment file, which this frontend can't reach. Run python -m backend.review retry <email_id> instead (see backend/review.py)."
-                        className="mt-2 flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-2 text-xs font-bold text-slate-400"
-                      >
-                        Retry (not implemented -- use the CLI)
-                      </button>
                     </>
                   )}
                 </div>

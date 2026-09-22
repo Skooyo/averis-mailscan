@@ -9,7 +9,7 @@ import type {
   CorrectionInfo,
   DuplicateAttachmentGroup,
   EmailCategory,
-  EscalationQueueItem,
+  ReviewItem,
   ResultStatus,
   ResultView,
 } from "@/types/averis";
@@ -135,15 +135,17 @@ export async function getComparisonResult(emailId: string, userEmail: string | n
 }
 
 /**
- * Escalated emails (escalation.required) this viewer can see, newest-
- * processed first, joined with their Email for subject/sender display.
- * Modeled on lib/emails.ts::getInboxEmails's style.
+ * Every comparison_request email this viewer can see that has actually gone through comparison
+ * (status match/mismatch/error -- skipped/unclassified emails never ran one, so they're excluded),
+ * newest-processed first, joined with their Email for subject/sender display. Includes clean
+ * matches and unescalated mismatches, not just the ones backend/escalate.py flagged -- see
+ * ReviewItem's own comment. Modeled on lib/emails.ts::getInboxEmails's style.
  */
-export async function getReviewQueue(userEmail: string | null): Promise<EscalationQueueItem[]> {
+export async function getReviewQueue(userEmail: string | null): Promise<ReviewItem[]> {
   await connectDB();
   const owners = visibleOwners(userEmail);
 
-  const results = (await Result.find({ owner: { $in: owners }, "escalation.required": true })
+  const results = (await Result.find({ owner: { $in: owners }, status: { $in: ["match", "mismatch", "error"] } })
     .sort({ processed_at: -1 })
     .lean()) as unknown as LeanResult[];
   if (results.length === 0) return [];
@@ -172,9 +174,11 @@ export async function getReviewQueue(userEmail: string | null): Promise<Escalati
       emailId: r.email_id,
       category: (r.category as EmailCategory | null) ?? null,
       status: r.status as ResultStatus,
+      message: r.message,
       subject: email?.subject ?? null,
       from: email?.from ?? null,
       reasons: r.escalation?.reasons ?? [],
+      required: r.escalation?.required ?? false,
       resolved: r.escalation?.resolved ?? false,
       processedAt: toIso(r.processed_at),
     };
