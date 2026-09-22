@@ -639,16 +639,6 @@ export function InboxScreen({ emails, canSync, lastSyncedAt }: { emails: InboxEm
                                 View Comparison
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                alert(`Flagged ${row.id} for review.`);
-                                setActionMenuOpen(null);
-                              }}
-                              className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                              Flag for Review
-                            </button>
                           </div>
                         )}
                       </div>

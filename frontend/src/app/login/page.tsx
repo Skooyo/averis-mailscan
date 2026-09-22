@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
-import { FileSpreadsheet } from "lucide-react";
 import { safeNext } from "@/lib/auth-shared";
 import { googleConfigured } from "@/lib/google";
 import { getCurrentUser } from "@/lib/session";
@@ -38,9 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
     <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] p-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500 text-white shadow-sm">
-            <FileSpreadsheet className="h-5 w-5" />
-          </div>
+          <Image src="/mailscan_icon.png" alt="MailScan" width={36} height={36} className="h-9 w-9 object-contain" />
           <span className="text-xl font-bold tracking-tight text-slate-900">MailScan</span>
         </div>
 
