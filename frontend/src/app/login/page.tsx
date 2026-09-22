@@ -55,6 +55,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           </p>
         )}
 
+        {configured && (
+          <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            Currently only approved test users can use OAuth, please continue with sample data if you wish to test.
+          </p>
+        )}
+
         <div className="mt-6 space-y-3">
           {/* A plain <a>, not <Link>: this is an API redirect, and Link would prefetch it. */}
           {configured ? (
